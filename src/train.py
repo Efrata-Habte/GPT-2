@@ -26,7 +26,7 @@ from src.data import default_data_dir, get_batch, load_data, load_meta, prepare_
 from src.model import GPT, GPTConfig
 from src.utils import apply_overrides, load_config, plot_loss_curves, set_seed
 
-LOG_FIELDS = ["step", "lr", "train_loss", "tokens_per_sec", "eval_train_loss", "eval_val_loss", "elapsed_s"]
+LOG_FIELDS = ["step", "lr", "train_loss", "tokens_per_sec", "eval_train_loss", "eval_val_loss", "elapsed_s", "grad_norm"]
 
 TRAIN_DEFAULTS = dict(
     batch_size=64, max_iters=3000, eval_interval=250, eval_iters=50, log_interval=10,
@@ -139,6 +139,7 @@ def train(cfg: dict, resume: str | None = None) -> dict:
     print(f"device={device} amp={use_amp} tokens/step={B * T:,} data={data_dir} vocab={meta['vocab_size']}")
     t_start = time.time() - (0.0)
     t_last, running, n_running = time.time(), torch.zeros((), device=device), 0
+    running_gn = torch.zeros((), device=device)   # sum of pre-clip gradient norms (training-stability diagnostic)
     tps_hist: list[float] = []
 
     model.train()
@@ -173,14 +174,15 @@ def train(cfg: dict, resume: str | None = None) -> dict:
         if scaler is not None:
             scaler.scale(loss).backward()
             scaler.unscale_(opt)                                 # so clipping sees true gradient norms
-            torch.nn.utils.clip_grad_norm_(model.parameters(), tc["grad_clip"])
+            gn = torch.nn.utils.clip_grad_norm_(model.parameters(), tc["grad_clip"])   # returns the PRE-clip norm
             scaler.step(opt)
             scaler.update()
         else:
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), tc["grad_clip"])
+            gn = torch.nn.utils.clip_grad_norm_(model.parameters(), tc["grad_clip"])
             opt.step()
         running += loss.detach()
+        running_gn += gn.detach()
         n_running += 1
 
         if (step + 1) % tc["log_interval"] == 0:
@@ -189,10 +191,13 @@ def train(cfg: dict, resume: str | None = None) -> dict:
             tps = B * T * n_running / (now - t_last)
             tps_hist.append(tps)
             if not math.isfinite(avg):
+                log_f.close()
                 raise RuntimeError(f"loss became {avg} at step {step + 1}")
             log.writerow({"step": step + 1, "lr": f"{lr:.6e}", "train_loss": f"{avg:.6f}",
-                          "tokens_per_sec": f"{tps:.0f}", "elapsed_s": f"{now - t_start:.1f}"})
+                          "tokens_per_sec": f"{tps:.0f}", "elapsed_s": f"{now - t_start:.1f}",
+                          "grad_norm": f"{(running_gn / n_running).item():.4f}"})
             running.zero_()
+            running_gn.zero_()
             n_running, t_last = 0, now
     log_f.close()
 

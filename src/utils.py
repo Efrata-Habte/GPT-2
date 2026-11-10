@@ -31,7 +31,13 @@ def apply_overrides(cfg: dict, overrides: list[str] | None) -> dict:
         *parents, leaf = key.split(".")
         for p in parents:
             node = node.setdefault(p, {})
-        node[leaf] = yaml.safe_load(raw)  # parses ints, floats, bools, strings
+        value = yaml.safe_load(raw)  # parses ints, floats, bools, strings
+        if isinstance(value, str):
+            try:
+                value = float(value)  # YAML 1.1 reads "1e-3" / "1e+30" as strings; they are floats
+            except ValueError:
+                pass
+        node[leaf] = value
     return cfg
 
 

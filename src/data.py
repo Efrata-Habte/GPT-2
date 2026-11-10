@@ -23,6 +23,13 @@ def default_data_dir(text_path: str | Path, tokenizer: str, bpe_vocab_size: int)
     return p.parent / f"{p.stem}_{suffix}"
 
 
+def data_dir_from_config(dc: dict) -> Path:
+    """Prepared-dataset directory for a config's `data:` section."""
+    if dc.get("dir"):
+        return Path(dc["dir"])
+    return default_data_dir(dc["path"], dc["tokenizer"], dc.get("bpe_vocab_size", 512))
+
+
 def prepare_dataset(
     text: str, out_dir: str | Path, tokenizer: str = "char", bpe_vocab_size: int = 512, val_frac: float = 0.1
 ) -> dict:

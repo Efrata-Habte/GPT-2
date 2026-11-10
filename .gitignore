@@ -6,3 +6,4 @@ data/input.txt
 data/*.bin
 checkpoints/
 *.pt
+data/*/

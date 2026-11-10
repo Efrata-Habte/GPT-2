@@ -93,6 +93,11 @@ def test_resume_matches_uninterrupted_run(data_dir, tmp_path):
         assert torch.allclose(a[k], b[k], atol=1e-6), k
 
 
+def test_apply_overrides_parses_scientific_notation():
+    cfg = apply_overrides({"train": {}}, ["train.lr=1e-3", "train.min_lr=2.5e-05", "data.tokenizer=bpe"])
+    assert cfg["train"]["lr"] == 1e-3 and cfg["train"]["min_lr"] == 2.5e-5 and cfg["data"]["tokenizer"] == "bpe"
+
+
 def test_apply_overrides():
     cfg = apply_overrides({"train": {"lr": 1}, "model": {}}, ["train.max_iters=200", "model.dropout=0.5", "train.mixed_precision=false"])
     assert cfg["train"]["max_iters"] == 200 and cfg["model"]["dropout"] == 0.5 and cfg["train"]["mixed_precision"] is False
