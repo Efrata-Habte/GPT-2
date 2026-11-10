@@ -34,6 +34,12 @@ def test_layernorm_matches_torch():
     assert torch.allclose(mine.gamma.grad, ref.weight.grad, atol=1e-4)
 
 
+def test_layernorm_shape_and_parameters():
+    ln = LayerNorm(64)
+    assert ln(torch.randn(3, 5, 64)).shape == (3, 5, 64)
+    assert [tuple(p.shape) for p in ln.parameters()] == [(64,), (64,)]   # gamma, beta
+
+
 def test_layernorm_output_statistics():
     y = LayerNorm(64)(torch.randn(3, 5, 64) * 10 + 7)
     assert torch.allclose(y.mean(-1), torch.zeros(3, 5), atol=1e-5)
