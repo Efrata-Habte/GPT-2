@@ -1,5 +1,4 @@
-# Tiny config: runs on CPU in a minute or two. Used for tests and smoke runs.
-# (A `train:` section is added in Phase 4.)
+# Tiny config: runs on CPU in about a minute. Used for tests and smoke runs.
 model:
   n_layer: 2
   n_head: 2
@@ -7,10 +6,26 @@ model:
   block_size: 64
   dropout: 0.1
   pos_encoding: learned     # learned | sinusoidal
-  norm_position: pre        # pre (GPT-2) | post (Vaswani)   [used from Phase 2]
-  tie_weights: true         # [used from Phase 3]
+  norm_position: pre        # pre (GPT-2) | post (Vaswani)
+  tie_weights: true
 
 data:
-  path: data/input.txt
+  path: data/input.txt      # raw text; change this to train on another corpus
   tokenizer: char           # char | bpe
   bpe_vocab_size: 512       # only used when tokenizer == bpe
+  # dir: data/input_char    # optional; default is derived from path + tokenizer; auto-prepared if missing
+
+train:
+  batch_size: 32
+  max_iters: 500
+  eval_interval: 100
+  eval_iters: 20
+  log_interval: 10
+  lr: 3.0e-3
+  min_lr: 3.0e-4
+  warmup_iters: 50
+  weight_decay: 0.1
+  grad_clip: 1.0
+  mixed_precision: false
+  seed: 1337
+  out_dir: checkpoints/tiny

@@ -1,4 +1,6 @@
-# Default "small" config from the assignment (~10.7M params with char-level vocab).
+# Default "small" config from the assignment (~10.8M params with char-level vocab).
+# max_iters=3000 is sized for a ~30 min budget on a Colab T4; check tokens_per_sec in the log
+# and lower/raise it (train.max_iters) to fit your hardware.
 model:
   n_layer: 6
   n_head: 6
@@ -6,10 +8,25 @@ model:
   block_size: 256
   dropout: 0.2
   pos_encoding: learned     # learned | sinusoidal
-  norm_position: pre        # pre (GPT-2) | post (Vaswani)   [used from Phase 2]
-  tie_weights: true         # [used from Phase 3]
+  norm_position: pre        # pre (GPT-2) | post (Vaswani)
+  tie_weights: true
 
 data:
   path: data/input.txt
   tokenizer: char           # char | bpe
   bpe_vocab_size: 512
+
+train:
+  batch_size: 64
+  max_iters: 3000
+  eval_interval: 250
+  eval_iters: 50
+  log_interval: 10
+  lr: 1.0e-3
+  min_lr: 1.0e-4
+  warmup_iters: 100
+  weight_decay: 0.1
+  grad_clip: 1.0
+  mixed_precision: true     # fp16 autocast + GradScaler (CUDA only)
+  seed: 1337
+  out_dir: checkpoints/small
