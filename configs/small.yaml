@@ -1,0 +1,15 @@
+# Default "small" config from the assignment (~10.7M params with char-level vocab).
+model:
+  n_layer: 6
+  n_head: 6
+  n_embd: 384
+  block_size: 256
+  dropout: 0.2
+  pos_encoding: learned     # learned | sinusoidal
+  norm_position: pre        # pre (GPT-2) | post (Vaswani)   [used from Phase 2]
+  tie_weights: true         # [used from Phase 3]
+
+data:
+  path: data/input.txt
+  tokenizer: char           # char | bpe
+  bpe_vocab_size: 512
