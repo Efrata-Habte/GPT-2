@@ -1,0 +1,9 @@
+{
+  "tokenizer": "char",
+  "normalize": "homophones",
+  "vocab_size": 348,
+  "train_tokens": 3375548,
+  "val_tokens": 375061,
+  "train_chars": 3375548,
+  "val_chars": 375061
+}

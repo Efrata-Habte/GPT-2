@@ -1,0 +1,29 @@
+{
+ "English": {
+  "chars": 1000000,
+  "bytes": 1000000,
+  "unique_chars": 65,
+  "bytes_per_char": 1.0,
+  "train_word_types": 10994,
+  "val_unseen_word_rate": 0.05539501662940952,
+  "words_per_100_chars": 18.341
+ },
+ "Amharic": {
+  "chars": 1000000,
+  "bytes": 2580901,
+  "unique_chars": 351,
+  "bytes_per_char": 2.580901,
+  "train_word_types": 38143,
+  "val_unseen_word_rate": 0.16605972323379461,
+  "words_per_100_chars": 19.222
+ },
+ "Amharic (normalized)": {
+  "chars": 1000000,
+  "bytes": 2580901,
+  "unique_chars": 323,
+  "bytes_per_char": 2.580901,
+  "train_word_types": 37465,
+  "val_unseen_word_rate": 0.16200187285402143,
+  "words_per_100_chars": 19.222
+ }
+}

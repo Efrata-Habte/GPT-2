@@ -105,3 +105,43 @@ def test_temperature_changes_sharpness():
 def test_sampling_matches_softmax_distribution():
     freq = torch.bincount(draw(n=20000), minlength=5).float() / 20000
     assert torch.allclose(freq, torch.softmax(LOGITS, -1)[0], atol=0.02)
+
+
+# ---------------- streaming + next-token distribution (used by the web demo) ----------------
+from src.generate import generate_stream, last_token_logits, next_token_probs  # noqa: E402
+
+
+def test_stream_yields_the_same_tokens_as_generate():
+    m = make_model()
+    prompt = torch.randint(0, 40, (1, 3))
+    streamed = [t.item() for t in generate_stream(m, prompt, 20, greedy=True)]
+    full = generate(m, prompt, 20, greedy=True)[0, 3:].tolist()
+    assert streamed == full and len(streamed) == 20
+
+
+def test_stream_is_lazy_and_restores_mode():
+    m = make_model().train()
+    it = generate_stream(m, torch.zeros(1, 2, dtype=torch.long), 5, greedy=True)
+    next(it)
+    it.close()                       # stop early (e.g. the user pressed Stop in the UI)
+    assert m.training
+
+
+def test_next_token_probs_is_a_distribution_and_respects_filters():
+    p = next_token_probs(LOGITS, temperature=1.0)
+    assert torch.allclose(p.sum(-1), torch.ones(1)) and torch.allclose(p, torch.softmax(LOGITS, -1))
+    assert (next_token_probs(LOGITS, top_k=2) > 0).sum().item() == 2
+    assert (next_token_probs(LOGITS, top_p=0.01) > 0).sum().item() == 1
+    sharp, flat = next_token_probs(LOGITS, temperature=0.3), next_token_probs(LOGITS, temperature=3.0)
+    assert sharp.max() > p.max() > flat.max()
+
+
+def test_next_token_probs_matches_what_sample_next_draws():
+    freq = torch.bincount(draw(n=20000, temperature=0.7, top_k=3), minlength=5).float() / 20000
+    assert torch.allclose(freq, next_token_probs(LOGITS, temperature=0.7, top_k=3)[0], atol=0.02)
+
+
+def test_last_token_logits_matches_forward():
+    m = make_model()
+    idx = torch.randint(0, 40, (1, 9))
+    assert torch.allclose(last_token_logits(m, idx), m(idx)[0][0, -1], atol=1e-6)

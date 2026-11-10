@@ -2,7 +2,7 @@
 
 On disk, a prepared dataset directory contains:
     train.bin, val.bin   flat arrays of token ids (uint16), the first 90% / last 10% of the text
-    tokenizer.json       the fitted tokenizer (char vocab or BPE merges)
+    tokenizer.json       the fitted tokenizer (char vocab, char-level BPE or byte-level BPE merges)
     meta.json            vocab size, token and character counts (chars are needed for bits-per-char)
 """
 from __future__ import annotations
@@ -16,10 +16,16 @@ import torch
 from src.tokenizer import BPETokenizer, CharTokenizer, load_tokenizer
 
 
-def default_data_dir(text_path: str | Path, tokenizer: str, bpe_vocab_size: int) -> Path:
-    """data/<file-stem>_<tokenizer>[<vocab>], next to the raw text file."""
+TOKENIZERS = ("char", "bpe", "bpe_byte", "bpe_char")   # "bpe" is an alias of "bpe_byte" (kept for old configs)
+
+
+def default_data_dir(text_path: str | Path, tokenizer: str, bpe_vocab_size: int, normalize: str | None = None) -> Path:
+    """<raw-file-dir>/<file-stem>_<tokenizer>[<vocab>][_norm], next to the raw text file."""
     p = Path(text_path)
-    suffix = "char" if tokenizer == "char" else f"bpe{bpe_vocab_size}"
+    suffix = {"char": "char", "bpe": f"bpe{bpe_vocab_size}", "bpe_byte": f"bpe{bpe_vocab_size}",
+              "bpe_char": f"cbpe{bpe_vocab_size}"}[tokenizer]
+    if normalize and normalize != "none":
+        suffix += "_norm"
     return p.parent / f"{p.stem}_{suffix}"
 
 
@@ -27,15 +33,33 @@ def data_dir_from_config(dc: dict) -> Path:
     """Prepared-dataset directory for a config's `data:` section."""
     if dc.get("dir"):
         return Path(dc["dir"])
-    return default_data_dir(dc["path"], dc["tokenizer"], dc.get("bpe_vocab_size", 512))
+    return default_data_dir(dc["path"], dc["tokenizer"], dc.get("bpe_vocab_size", 512), dc.get("normalize"))
+
+
+def normalize_text(text: str, mode: str | None) -> str:
+    """Optional Amharic homophone normalisation (data/amharic/normalize.py); identity when mode is None."""
+    if mode in (None, "none", ""):
+        return text
+    import sys
+    root = str(Path(__file__).resolve().parents[1])
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from data.amharic.normalize import normalize_amharic
+    return normalize_amharic(text, mode)
 
 
 def prepare_dataset(
-    text: str, out_dir: str | Path, tokenizer: str = "char", bpe_vocab_size: int = 512, val_frac: float = 0.1
+    text: str, out_dir: str | Path, tokenizer: str = "char", bpe_vocab_size: int = 512, val_frac: float = 0.1,
+    normalize: str | None = None,
 ) -> dict:
-    """Split text 90/10 (contiguous), fit a tokenizer on the TRAIN part only, write .bin files."""
+    """Split text 90/10 (contiguous), fit a tokenizer on the TRAIN part only, write .bin files.
+
+    tokenizer: "char" | "bpe_char" (BPE over characters) | "bpe"/"bpe_byte" (BPE over UTF-8 bytes).
+    normalize: optional text normalisation applied BEFORE splitting/tokenizing (see data/amharic/normalize.py).
+    """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    text = normalize_text(text, normalize)
     split = int((1.0 - val_frac) * len(text))
     train_text, val_text = text[:split], text[split:]
 
@@ -43,11 +67,14 @@ def prepare_dataset(
         tok = CharTokenizer.from_text(train_text)
         # A rare char may appear only in val; give the vocab all chars so encode never fails.
         tok = CharTokenizer.from_text(text) if set(val_text) - set(tok.chars) else tok
-    elif tokenizer == "bpe":
-        tok = BPETokenizer()
+    elif tokenizer in ("bpe", "bpe_byte"):
+        tok = BPETokenizer(level="byte")
         tok.train(train_text, bpe_vocab_size)  # byte-level => val text can never contain unknown symbols
+    elif tokenizer == "bpe_char":
+        tok = BPETokenizer(level="char")
+        tok.train(train_text, bpe_vocab_size, alphabet=set(text))  # alphabet from the whole text, as for "char"
     else:
-        raise ValueError(f"unknown tokenizer {tokenizer!r}")
+        raise ValueError(f"unknown tokenizer {tokenizer!r}; choose from {TOKENIZERS}")
 
     assert tok.vocab_size < 2**16, "uint16 storage needs vocab_size < 65536"
     train_ids = np.array(tok.encode(train_text), dtype=np.uint16)
@@ -57,6 +84,7 @@ def prepare_dataset(
     tok.save(out / "tokenizer.json")
     meta = {
         "tokenizer": tokenizer,
+        "normalize": normalize or "none",
         "vocab_size": tok.vocab_size,
         "train_tokens": len(train_ids),
         "val_tokens": len(val_ids),

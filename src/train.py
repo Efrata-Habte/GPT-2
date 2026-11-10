@@ -22,7 +22,7 @@ from pathlib import Path
 
 import torch
 
-from src.data import default_data_dir, get_batch, load_data, load_meta, prepare_dataset
+from src.data import data_dir_from_config, get_batch, load_data, load_meta, prepare_dataset
 from src.model import GPT, GPTConfig
 from src.utils import apply_overrides, load_config, plot_loss_curves, set_seed
 
@@ -78,12 +78,15 @@ def estimate_loss(model: GPT, data: dict, tc: dict, block_size: int, device: str
     return out
 
 
-def save_checkpoint(path: Path, model, opt, scaler, cfg: dict, step: int, best_val: float, gen) -> None:
+def save_checkpoint(path: Path, model, opt, scaler, cfg: dict, step: int, best_val: float, gen,
+                    tokenizer: dict | None = None) -> None:
+    """tokenizer: the tokenizer in dict form (src.tokenizer.tokenizer_to_dict); stored inside the file so a
+    checkpoint alone is enough to generate text."""
     torch.save({
         "model": model.state_dict(), "optimizer": opt.state_dict(),
         "scaler": scaler.state_dict() if scaler is not None else None,
         "config": cfg, "model_config": asdict(model.cfg), "step": step, "best_val_loss": best_val,
-        "batch_gen_state": gen.get_state(), "torch_rng_state": torch.get_rng_state(),
+        "batch_gen_state": gen.get_state(), "torch_rng_state": torch.get_rng_state(), "tokenizer": tokenizer,
     }, path)
 
 
@@ -95,11 +98,11 @@ def train(cfg: dict, resume: str | None = None) -> dict:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # ---- data (prepared on the fly if missing) ----
-    data_dir = Path(dc.get("dir") or default_data_dir(dc["path"], dc["tokenizer"], dc.get("bpe_vocab_size", 512)))
+    data_dir = data_dir_from_config(dc)
     if not (data_dir / "train.bin").exists():
         print(f"preparing dataset {data_dir} from {dc['path']} ...")
         prepare_dataset(Path(dc["path"]).read_text(encoding="utf-8"), data_dir, dc["tokenizer"],
-                        dc.get("bpe_vocab_size", 512))
+                        dc.get("bpe_vocab_size", 512), normalize=dc.get("normalize"))
     meta, data = load_meta(data_dir), load_data(data_dir)
 
     # ---- model ----
@@ -114,8 +117,9 @@ def train(cfg: dict, resume: str | None = None) -> dict:
     gen = torch.Generator().manual_seed(tc["seed"])   # dedicated RNG for batch sampling
     out_dir = Path(tc["out_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("tokenizer.json", "meta.json"):   # keep the checkpoint folder self-contained for generate.py
+    for name in ("tokenizer.json", "meta.json"):   # also keep copies next to the checkpoints
         shutil.copy(data_dir / name, out_dir / name)
+    tok_dict = json.loads((data_dir / "tokenizer.json").read_text(encoding="utf-8"))
     start_step, best_val, resumed = 0, float("inf"), False
     if resume:
         ck = torch.load(resume, map_location=device, weights_only=False)
@@ -157,8 +161,8 @@ def train(cfg: dict, resume: str | None = None) -> dict:
             log_f.flush()
             if losses["val"] < best_val:
                 best_val = losses["val"]
-                save_checkpoint(out_dir / "ckpt_best.pt", model, opt, scaler, cfg, step, best_val, gen)
-            save_checkpoint(out_dir / "ckpt_last.pt", model, opt, scaler, cfg, step, best_val, gen)
+                save_checkpoint(out_dir / "ckpt_best.pt", model, opt, scaler, cfg, step, best_val, gen, tok_dict)
+            save_checkpoint(out_dir / "ckpt_last.pt", model, opt, scaler, cfg, step, best_val, gen, tok_dict)
             t_last = time.time()   # don't count eval time in tokens/sec
         if step == last_step:
             break

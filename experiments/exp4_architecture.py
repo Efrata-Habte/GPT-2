@@ -20,7 +20,7 @@ from experiments.common import (COLORS, STANDARD_HEADERS, add_sweep_args, enter_
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    add_sweep_args(ap)
+    add_sweep_args(ap, "configs/exp4_architecture.yaml")
     ap.add_argument("--param", choices=["n_layer", "n_head", "n_embd"], default="n_layer")
     ap.add_argument("--values", type=int, nargs="+", default=None)
     a = ap.parse_args()

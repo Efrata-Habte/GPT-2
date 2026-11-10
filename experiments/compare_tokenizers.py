@@ -1,4 +1,4 @@
-"""Phase 1 experiment: vocab size vs. sequence length, char-level vs. my BPE.
+"""Phase 1 experiment: vocab size vs. sequence length: char-level vs. my BPE (over characters "cbpe" and over bytes "bbpe").
 
 BPE is trained on the first 90% of the text only and all statistics are measured on the
 held-out last 10%, so the numbers reflect generalisation, not memorisation.
@@ -39,15 +39,18 @@ def main() -> None:
     n_char = len(val_text)
     rows.append(("char", char_tok.vocab_size, n_char, 1.0))
 
-    t0 = time.time()
-    big = BPETokenizer()
-    big.train(train_text, max(args.vocab_sizes))
-    print(f"trained BPE up to vocab {big.vocab_size} in {time.time() - t0:.1f}s")
-    for v in args.vocab_sizes:
-        tok = big.truncated(v)
-        ids = tok.encode(val_text)
-        assert tok.decode(ids) == val_text  # round trip on held-out text
-        rows.append((f"bpe-{v}", tok.vocab_size, len(ids), n_char / len(ids)))
+    for level, label in (("char", "cbpe"), ("byte", "bbpe")):
+        t0 = time.time()
+        big = BPETokenizer(level=level)
+        big.train(train_text, max(args.vocab_sizes), alphabet=set(text) if level == "char" else None)
+        print(f"trained {level}-level BPE up to vocab {big.vocab_size} in {time.time() - t0:.1f}s")
+        for v in args.vocab_sizes:
+            if v < big.base_size:
+                continue
+            tok = big.truncated(v)
+            ids = tok.encode(val_text)
+            assert tok.decode(ids) == val_text  # round trip on held-out text
+            rows.append((f"{label}-{v}", tok.vocab_size, len(ids), n_char / len(ids)))
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -60,13 +63,17 @@ def main() -> None:
     (out / "tokenizer_comparison.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
 
-    fig, ax = plt.subplots(figsize=(5, 3.5))
-    ax.plot([r[1] for r in rows], [r[3] for r in rows], "o-")
-    for name, v, _, cpt in rows:
-        ax.annotate(name, (v, cpt), textcoords="offset points", xytext=(4, -10), fontsize=8)
+    fig, ax = plt.subplots(figsize=(6, 4))
+    for prefix, color, name in (("cbpe", "#0072B2", "char-level BPE"), ("bbpe", "#D55E00", "byte-level BPE")):
+        pts = [r for r in rows if r[0].startswith(prefix)]
+        ax.plot([r[1] for r in pts], [r[3] for r in pts], "o-", color=color, label=name)
+    ax.plot([rows[0][1]], [rows[0][3]], "s", color="#009E73", ms=8, label="char-level (no merges)")
+    ax.set_xscale("log")
     ax.set_xlabel("vocab size")
     ax.set_ylabel("avg characters per token (higher = shorter sequences)")
     ax.set_title("Vocab size vs. compression (held-out text)")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3, which="both")
     fig.tight_layout()
     fig.savefig(out / "tokenizer_comparison.png", dpi=150)
 

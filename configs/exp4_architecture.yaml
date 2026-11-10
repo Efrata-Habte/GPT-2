@@ -1,0 +1,32 @@
+# Experiment 4 (architecture sweep). exp4_architecture.py varies ONE of model.n_layer {2,4,6}, model.n_head {1,2,4,8}
+# (use --set model.n_embd=384 --values 1 2 4 6 for the assignment's {1,2,4,6}), model.n_embd {128,256,384}; all else fixed.
+# Shared settings (data, steps, seed) are identical across experiments 4-8; see configs/exp_base.yaml.
+model:
+  n_layer: 4
+  n_head: 4
+  n_embd: 256
+  block_size: 128
+  dropout: 0.1
+  pos_encoding: learned
+  norm_position: pre
+  tie_weights: true
+
+data:
+  path: data/input.txt
+  tokenizer: char
+  bpe_vocab_size: 512
+
+train:
+  batch_size: 64
+  max_iters: 1500
+  eval_interval: 100
+  eval_iters: 30
+  log_interval: 10
+  lr: 1.0e-3
+  min_lr: 1.0e-4
+  warmup_iters: 100
+  weight_decay: 0.1
+  grad_clip: 1.0
+  mixed_precision: true
+  seed: 1337
+  out_dir: checkpoints/exp4_architecture   # sweep scripts override this per run

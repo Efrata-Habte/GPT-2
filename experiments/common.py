@@ -20,10 +20,11 @@ import matplotlib.pyplot as plt
 import torch
 
 from src.data import data_dir_from_config
-from src.generate import load_model
-from src.tokenizer import load_tokenizer
+from src.generate import load_model, tokenizer_for_checkpoint
 from src.train import train
-from src.utils import apply_overrides, load_config
+from src.utils import apply_overrides, load_config, setup_ethiopic_font
+
+setup_ethiopic_font()  # Ge'ez labels (token names, Amharic samples) must render in every plot
 
 # Okabe-Ito colour-blind-safe palette
 COLORS = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#000000"]
@@ -45,8 +46,7 @@ def load_bundle(ckpt: str | Path, device: str):
     """-> (model, checkpoint dict, tokenizer, data_dir)."""
     model, ck = load_model(ckpt, device)
     data_dir = data_dir_from_config(ck["config"]["data"])
-    tok_path = Path(ckpt).parent / "tokenizer.json"
-    tok = load_tokenizer(tok_path if tok_path.exists() else data_dir / "tokenizer.json")
+    tok = tokenizer_for_checkpoint(ck, ckpt)
     return model, ck, tok, data_dir
 
 

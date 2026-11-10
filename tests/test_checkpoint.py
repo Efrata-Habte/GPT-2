@@ -67,3 +67,26 @@ def test_checkpoint_from_training_loads_and_matches_best_val(tmp_path):
             xb, yb = get_batch(data["val"], 8, 16, gen)
             losses.append(model(xb, yb)[1].item())
     assert sum(losses) / 4 == pytest.approx(ck["best_val_loss"], abs=1e-5)
+
+
+def test_checkpoint_embeds_tokenizer_for_every_tokenizer_type(tmp_path):
+    """A .pt file alone must be enough to generate text: the tokenizer travels inside it."""
+    from src.generate import tokenizer_for_checkpoint
+    from src.tokenizer import tokenizer_to_dict
+
+    text = "ሰላም ለዓለም። hello world. " * 100
+    for tk in ("char", "bpe_char", "bpe_byte"):
+        ddir, out = tmp_path / f"ds_{tk}", tmp_path / f"run_{tk}"
+        prepare_dataset(text, ddir, tk, bpe_vocab_size=300)
+        cfg = {
+            "model": dict(n_layer=1, n_head=2, n_embd=16, block_size=16, dropout=0.0),
+            "data": dict(path="unused", tokenizer=tk, dir=str(ddir)),
+            "train": dict(batch_size=4, max_iters=4, eval_interval=4, eval_iters=1, log_interval=2,
+                          mixed_precision=False, out_dir=str(out)),
+        }
+        train(cfg)
+        (out / "tokenizer.json").unlink()                      # prove we do not need the side file
+        model, ck = load_model(out / "ckpt_best.pt")
+        tok = tokenizer_for_checkpoint(ck, out / "ckpt_best.pt")
+        assert tok.decode(tok.encode(text)) == text and tok.vocab_size == model.cfg.vocab_size
+        assert tokenizer_to_dict(tok)["type"] == {"char": "char", "bpe_char": "bpe_char", "bpe_byte": "bpe"}[tk]

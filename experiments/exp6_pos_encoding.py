@@ -15,7 +15,7 @@ from experiments.common import (STANDARD_HEADERS, add_sweep_args, enter_repo_roo
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    add_sweep_args(ap)
+    add_sweep_args(ap, "configs/exp6_pos_encoding.yaml")
     a = ap.parse_args()
     enter_repo_root()
     base = load_base(a)

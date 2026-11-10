@@ -2,8 +2,19 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ipynb_checkpoints/
-data/input.txt
-data/*.bin
 checkpoints/
 *.pt
-data/*/
+# raw / prepared data (code in data/ and data/amharic/ IS tracked)
+data/input.txt
+data/*.bin
+data/input_*/
+data/amharic_download/
+data/amharic/*.txt
+data/amharic/*_char/
+data/amharic/*_bpe*/
+data/amharic/*_cbpe*/
+results/runs/
+logs/
+# demo checkpoints are small and meant to be committed / uploaded to a Space
+!app/checkpoints/**/*.pt
+build/

@@ -35,7 +35,7 @@ def fit_power_law(params: list[float], losses: list[float]) -> tuple[float, floa
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    add_sweep_args(ap)
+    add_sweep_args(ap, "configs/exp8_scaling.yaml")
     ap.add_argument("--extra_runs", nargs="*", default=[], help="folders of finished runs (containing summary.json) to include")
     ap.add_argument("--no_train", action="store_true", help="only aggregate --extra_runs, train nothing")
     a = ap.parse_args()

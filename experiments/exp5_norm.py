@@ -31,7 +31,7 @@ def grad_stats(r: dict) -> tuple[str, str, str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    add_sweep_args(ap)
+    add_sweep_args(ap, "configs/exp5_norm.yaml")
     ap.add_argument("--lr_mult", type=float, default=3.0, help="second, higher learning rate = lr_mult x base lr")
     a = ap.parse_args()
     enter_repo_root()

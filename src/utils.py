@@ -81,3 +81,25 @@ def plot_loss_curves(csv_path: str | Path, png_path: str | Path, title: str = ""
     Path(png_path).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(png_path, dpi=150)
     plt.close(fig)
+
+
+ETHIOPIC_FONTS = ["Noto Sans Ethiopic", "Nyala", "Ebrima", "Abyssinica SIL", "Noto Serif Ethiopic"]
+
+
+def setup_ethiopic_font() -> str | None:
+    """Make matplotlib able to draw Ge'ez (Ethiopic) text.
+
+    Registers the bundled Noto Sans Ethiopic (assets/fonts/, SIL OFL) and puts every available Ethiopic-capable
+    font in front of DejaVu Sans in the font fallback list; matplotlib then picks a font per glyph, so English and
+    Ge'ez labels can share one plot. Returns the preferred Ethiopic font family found, or None.
+    """
+    from matplotlib import font_manager as fm
+    import matplotlib
+
+    bundled = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "NotoSansEthiopic-Regular.ttf"
+    if bundled.exists():
+        fm.fontManager.addfont(str(bundled))
+    available = {f.name for f in fm.fontManager.ttflist}
+    chosen = [n for n in ETHIOPIC_FONTS if n in available]
+    matplotlib.rcParams["font.family"] = chosen + ["DejaVu Sans"]
+    return chosen[0] if chosen else None

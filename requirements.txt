@@ -4,3 +4,11 @@ pyyaml
 matplotlib
 pytest
 tqdm
+# web demo (app/app.py)
+streamlit>=1.35
+pandas
+altair
+# demo notebook (optional): only needed to rebuild/execute notebooks/demo.ipynb
+nbformat
+nbconvert
+ipykernel

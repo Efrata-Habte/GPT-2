@@ -120,3 +120,64 @@ def test_run_variants_trains_caches_and_handles_divergence(tmp_path):
     diverge = run_variants(base, [{"name": "boom", "overrides": {"train.lr": 1e30, "train.grad_clip": 1e30}}], tmp_path / "runs")
     assert diverge[0]["status"] in ("diverged", "ok")                  # either is acceptable; it must not crash the sweep
     assert json.loads((res[0]["dir"] / "summary.json").read_text())["params"] == res[0]["params"] or True
+
+
+# ---------------- exp10 (Amharic) ----------------
+def test_char_coverage():
+    from experiments.exp10_amharic import char_coverage
+    assert char_coverage("aaaabbc", 0.5) == 1          # 'a' alone is 4/7 of the text
+    assert char_coverage("aaaabbc", 0.8) == 2
+    assert char_coverage("aaaabbc", 1.0) == 3
+
+
+def test_fragment_stats_and_token_view_on_geez():
+    from experiments.exp10_amharic import fragment_stats, show_tokens
+    from src.tokenizer import BPETokenizer
+    text = "ሰላም ለዓለም። ሰላም ነው። እንዴት ነህ? " * 40
+    small, big = BPETokenizer(), BPETokenizer()
+    small.train(text, 262)                               # only 6 merges: Ge'ez characters stay split into bytes
+    big.train(text, 400)
+    fs_small = fragment_stats(small, small.encode(text), text)
+    fs_big = fragment_stats(big, big.encode(text), text)
+    assert fs_small["fragment_share"] > 0.3 and fs_small["own_token_share"] < 0.9
+    assert fs_big["fragment_share"] < fs_small["fragment_share"] and fs_big["own_token_share"] > fs_small["own_token_share"]
+    assert "<" in show_tokens(small, small.encode("ሰላም"))      # raw byte fragments are shown as <hex>
+    assert fragment_stats(big, big.encode("hello world"), "hello world")["fragment_share"] == 0.0   # ASCII never fragments
+
+
+def test_params_for_vocab_matches_real_model():
+    from experiments.exp10_amharic import params_for_vocab
+    cfg = dict(n_layer=2, n_head=2, n_embd=32, block_size=16, dropout=0.0)
+    total, share = params_for_vocab(cfg, 500)
+    assert total == GPT(GPTConfig(vocab_size=500, **cfg)).num_params()
+    assert 0 < share < 1
+
+
+def test_exp1_word_regex_handles_geez():
+    assert words_of("ሰላም ለዓለም። it's") == ["ሰላም", "ለዓለም", "it's"]
+
+
+# ---------------- exp11 (Phase 9 study) ----------------
+def test_types_to_cover_and_bpc():
+    from collections import Counter
+
+    from experiments.exp11_amharic_study import bpc_from_loss, types_to_cover
+    c = Counter({"a": 50, "b": 30, "c": 15, "d": 5})
+    assert types_to_cover(c, 0.5) == 1 and types_to_cover(c, 0.8) == 2 and types_to_cover(c, 0.99) == 4
+    assert bpc_from_loss(math.log(2), tokens=100, chars=100) == pytest.approx(1.0)       # ln2 nats/char = 1 bit/char
+    assert bpc_from_loss(math.log(2), tokens=50, chars=100) == pytest.approx(0.5)        # half as many tokens as chars
+
+
+def test_evaluate_tokenizer_and_fragment_share():
+    from experiments.exp11_amharic_study import evaluate_tokenizer, fragment_share
+    from src.tokenizer import BPETokenizer
+    text = "ሰላም ለዓለም። ሰላም ነው። " * 50
+    byte_tok, char_tok = BPETokenizer(level="byte"), BPETokenizer(level="char")
+    byte_tok.train(text, 270)
+    char_tok.train(text, len(set(text)) + 20)
+    rb = evaluate_tokenizer("Amharic", "bpe_byte", 270, byte_tok, text)
+    rc = evaluate_tokenizer("Amharic", "bpe_char", 0, char_tok, text)
+    assert rb["fragment_share"] > 0.3 and rc["fragment_share"] == 0.0 and fragment_share(char_tok, char_tok.encode(text)) == 0.0
+    assert rb["tokens"] > rc["tokens"]                       # byte level is longer for Ge'ez
+    assert rb["bytes_per_token"] == pytest.approx(len(text.encode()) / rb["tokens"])
+    assert rc["tokens_per_char"] < 1.0 and rc["types_for_95"] <= rc["types_for_99"]

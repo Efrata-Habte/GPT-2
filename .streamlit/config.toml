@@ -1,0 +1,5 @@
+[server]
+enableStaticServing = true   # serves app/static/ (the bundled Noto Sans Ethiopic font) at /app/static/
+
+[browser]
+gatherUsageStats = false

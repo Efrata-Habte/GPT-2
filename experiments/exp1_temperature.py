@@ -23,7 +23,7 @@ import torch
 
 from src.generate import encode_prompt, generate
 
-WORD = re.compile(r"[A-Za-z']+")
+WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)*")   # letters in ANY script (Latin, Ge'ez, ...) with inner apostrophes
 
 
 def words_of(text: str) -> list[str]:

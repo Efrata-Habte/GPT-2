@@ -15,30 +15,24 @@ import torch
 import torch.nn.functional as F
 
 from src.model import GPT, GPTConfig
-from src.tokenizer import load_tokenizer
+from src.tokenizer import load_tokenizer, tokenizer_from_dict
 
 
 # --------------------------------------------------------------------------------------
 # Sampling
 # --------------------------------------------------------------------------------------
-def sample_next(
-    logits: torch.Tensor,
-    temperature: float = 1.0,
-    top_k: int | None = None,
-    top_p: float | None = None,
-    greedy: bool = False,
-    generator: torch.Generator | None = None,
+def next_token_probs(
+    logits: torch.Tensor, temperature: float = 1.0, top_k: int | None = None, top_p: float | None = None
 ) -> torch.Tensor:
-    """Pick the next token from next-token logits. logits: (B, V) -> (B, 1) token ids.
+    """The distribution the sampler draws from. logits: (B, V) -> probabilities (B, V).
 
-    Order: temperature -> top-k filter -> top-p filter -> softmax -> sample.
+    Order: temperature -> top-k filter -> top-p filter -> softmax.
       temperature: logits / T. T<1 sharpens the distribution, T>1 flattens it, T->0 is greedy.
       top_k:       keep only the k highest-logit tokens.
       top_p:       keep the smallest set of top tokens whose probability mass reaches p (nucleus).
+    Removed tokens get probability exactly 0.
     """
-    if greedy or temperature == 0:
-        return logits.argmax(dim=-1, keepdim=True)                              # (B, 1)
-    logits = logits / temperature                                               # (B, V)
+    logits = logits / max(temperature, 1e-8)                                    # (B, V)
     if top_k is not None:
         k = min(top_k, logits.size(-1))
         kth_best = torch.topk(logits, k, dim=-1).values[:, -1:]                 # (B, 1) k-th largest logit
@@ -52,7 +46,21 @@ def sample_next(
         drop_sorted = (cum - sorted_probs) >= top_p                              # (B, V)
         drop = torch.zeros_like(drop_sorted).scatter(-1, sorted_idx, drop_sorted)  # undo the sort
         logits = logits.masked_fill(drop, float("-inf"))
-    probs = F.softmax(logits, dim=-1)                                            # (B, V)
+    return F.softmax(logits, dim=-1)                                             # (B, V)
+
+
+def sample_next(
+    logits: torch.Tensor,
+    temperature: float = 1.0,
+    top_k: int | None = None,
+    top_p: float | None = None,
+    greedy: bool = False,
+    generator: torch.Generator | None = None,
+) -> torch.Tensor:
+    """Pick the next token from next-token logits. logits: (B, V) -> (B, 1) token ids."""
+    if greedy or temperature == 0:
+        return logits.argmax(dim=-1, keepdim=True)                              # (B, 1)
+    probs = next_token_probs(logits, temperature, top_k, top_p)                  # (B, V)
     return torch.multinomial(probs, num_samples=1, generator=generator)         # (B, 1)
 
 
@@ -60,7 +68,7 @@ def sample_next(
 # Generation loop
 # --------------------------------------------------------------------------------------
 @torch.no_grad()
-def generate(
+def generate_stream(
     model: GPT,
     idx: torch.Tensor,
     max_new_tokens: int,
@@ -70,8 +78,8 @@ def generate(
     greedy: bool = False,
     use_cache: bool = True,
     generator: torch.Generator | None = None,
-) -> torch.Tensor:
-    """Extend `idx` (B, T) by `max_new_tokens` tokens. Returns (B, T + max_new_tokens).
+):
+    """Generator: yields the next token id as a (B, 1) tensor, one decoding step at a time.
 
     Without cache: every step re-runs the model on the last block_size tokens -> O(T) work per
     new token (O(T^2) with attention). With cache: the K/V of earlier tokens are stored, and each
@@ -86,19 +94,48 @@ def generate(
     model.eval()
     block_size = model.cfg.block_size
     past = None
-    for _ in range(max_new_tokens):
-        if not use_cache:
-            logits, _ = model(idx[:, -block_size:])                              # (B, T', V)
-        elif past is None or past[0][0].size(2) >= block_size:
-            # (Re)build the cache from the current window ("prefill").
-            logits, _, past = model(idx[:, -block_size:], use_cache=True)        # (B, T', V)
-        else:
-            # Decode: feed ONLY the newest token; its position = number of cached tokens.
-            logits, _, past = model(idx[:, -1:], past_kvs=past, use_cache=True)  # (B, 1, V)
-        next_id = sample_next(logits[:, -1, :], temperature, top_k, top_p, greedy, generator)  # (B, 1)
-        idx = torch.cat([idx, next_id], dim=1)                                   # (B, T+1)
+    try:
+        for _ in range(max_new_tokens):
+            if not use_cache:
+                logits, _ = model(idx[:, -block_size:])                              # (B, T', V)
+            elif past is None or past[0][0].size(2) >= block_size:
+                # (Re)build the cache from the current window ("prefill").
+                logits, _, past = model(idx[:, -block_size:], use_cache=True)        # (B, T', V)
+            else:
+                # Decode: feed ONLY the newest token; its position = number of cached tokens.
+                logits, _, past = model(idx[:, -1:], past_kvs=past, use_cache=True)  # (B, 1, V)
+            next_id = sample_next(logits[:, -1, :], temperature, top_k, top_p, greedy, generator)  # (B, 1)
+            idx = torch.cat([idx, next_id], dim=1)                                   # (B, T+1)
+            yield next_id
+    finally:
+        model.train(was_training)
+
+
+@torch.no_grad()
+def generate(
+    model: GPT,
+    idx: torch.Tensor,
+    max_new_tokens: int,
+    temperature: float = 1.0,
+    top_k: int | None = None,
+    top_p: float | None = None,
+    greedy: bool = False,
+    use_cache: bool = True,
+    generator: torch.Generator | None = None,
+) -> torch.Tensor:
+    """Extend `idx` (B, T) by `max_new_tokens` tokens. Returns (B, T + max_new_tokens)."""
+    new = list(generate_stream(model, idx, max_new_tokens, temperature, top_k, top_p, greedy, use_cache, generator))
+    return torch.cat([idx, *new], dim=1) if new else idx
+
+
+@torch.no_grad()
+def last_token_logits(model: GPT, idx: torch.Tensor) -> torch.Tensor:
+    """Logits for the token that follows `idx` (1, T): (V,). Context is cropped to block_size."""
+    was_training = model.training
+    model.eval()
+    logits, _ = model(idx[:, -model.cfg.block_size:])
     model.train(was_training)
-    return idx
+    return logits[0, -1]
 
 
 # --------------------------------------------------------------------------------------
@@ -111,6 +148,16 @@ def load_model(ckpt_path: str | Path, device: str = "cpu") -> tuple[GPT, dict]:
     model.load_state_dict(ck["model"])
     model.eval()
     return model, ck
+
+
+def tokenizer_for_checkpoint(ck: dict, ckpt_path: str | Path):
+    """The tokenizer stored inside the checkpoint; falls back to tokenizer.json beside it (older checkpoints)."""
+    if ck.get("tokenizer"):
+        return tokenizer_from_dict(ck["tokenizer"])
+    p = Path(ckpt_path).parent / "tokenizer.json"
+    if not p.exists():
+        raise SystemExit(f"checkpoint has no embedded tokenizer and {p} does not exist")
+    return load_tokenizer(p)
 
 
 def encode_prompt(tok, prompt: str, device: str) -> torch.Tensor:
@@ -150,7 +197,7 @@ def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", help="checkpoint (.pt); the tokenizer is read from the same folder")
+    ap.add_argument("--ckpt", help="checkpoint (.pt); contains its own tokenizer")
     ap.add_argument("--prompt", default="")
     ap.add_argument("--max_new_tokens", type=int, default=300)
     ap.add_argument("--temperature", type=float, default=0.8)
@@ -188,11 +235,8 @@ def main() -> None:
 
     if not a.ckpt:
         raise SystemExit("--ckpt is required")
-    model, _ = load_model(a.ckpt, a.device)
-    tok_path = Path(a.ckpt).parent / "tokenizer.json"
-    if not tok_path.exists():
-        raise SystemExit(f"{tok_path} not found (re-run training, or copy the dataset's tokenizer.json there)")
-    tok = load_tokenizer(tok_path)
+    model, ck = load_model(a.ckpt, a.device)
+    tok = tokenizer_for_checkpoint(ck, a.ckpt)
     gen = torch.Generator(device="cpu").manual_seed(a.seed)
     idx = encode_prompt(tok, a.prompt, a.device).repeat(a.num_samples, 1)
     out = generate(model, idx, a.max_new_tokens, a.temperature, a.top_k, a.top_p, a.greedy,
