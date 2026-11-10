@@ -15,6 +15,7 @@ import contextlib
 import csv
 import json
 import math
+import shutil
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -113,6 +114,8 @@ def train(cfg: dict, resume: str | None = None) -> dict:
     gen = torch.Generator().manual_seed(tc["seed"])   # dedicated RNG for batch sampling
     out_dir = Path(tc["out_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("tokenizer.json", "meta.json"):   # keep the checkpoint folder self-contained for generate.py
+        shutil.copy(data_dir / name, out_dir / name)
     start_step, best_val, resumed = 0, float("inf"), False
     if resume:
         ck = torch.load(resume, map_location=device, weights_only=False)

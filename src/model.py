@@ -85,15 +85,17 @@ class Embeddings(nn.Module):
             self.emb_scale = math.sqrt(cfg.n_embd)
         self.drop = nn.Dropout(cfg.dropout)
 
-    def forward(self, idx: torch.Tensor) -> torch.Tensor:
+    def forward(self, idx: torch.Tensor, start_pos: int = 0) -> torch.Tensor:
+        """start_pos: absolute position of idx[:, 0]. Non-zero only with a KV cache (Phase 5),
+        where we feed just the new tokens but they must get their true positions."""
         B, T = idx.shape                                          # idx: (B, T) integer token ids
-        assert T <= self.cfg.block_size, f"sequence length {T} > block_size {self.cfg.block_size}"
+        assert start_pos + T <= self.cfg.block_size, f"positions up to {start_pos + T} > block_size {self.cfg.block_size}"
         tok = self.tok_emb(idx) * self.emb_scale                  # (B, T, C)
         if self.cfg.pos_encoding == "learned":
-            positions = torch.arange(T, device=idx.device)        # (T,)  = [0, 1, ..., T-1]
+            positions = torch.arange(start_pos, start_pos + T, device=idx.device)   # (T,)
             pos = self.pos_emb(positions)                         # (T, C)
         else:
-            pos = self.pe[:T]                                     # (T, C)
+            pos = self.pe[start_pos:start_pos + T]                # (T, C)
         x = tok + pos                                             # (B, T, C) + (T, C) -> broadcast over B
         return self.drop(x)                                       # (B, T, C)
 
@@ -147,8 +149,13 @@ class CausalSelfAttention(nn.Module):
         mask = torch.tril(torch.ones(cfg.block_size, cfg.block_size))
         self.register_buffer("mask", mask.view(1, 1, cfg.block_size, cfg.block_size), persistent=False)
 
-    def forward(self, x: torch.Tensor, return_attn: bool = False):
-        """x: (B, T, C) -> (y: (B, T, C), attn: (B, nh, T, T) or None)."""
+    def forward(self, x: torch.Tensor, return_attn: bool = False, past_kv=None, use_cache: bool = False):
+        """x: (B, T, C) -> (y: (B, T, C), attn: (B, nh, T, S) or None)   [S = T without a cache]
+
+        KV cache: `past_kv = (k, v)`, each (B, nh, S_past, hs), holds the keys/values of earlier
+        tokens; x then contains only the NEW tokens. With use_cache=True a third value is returned:
+        the updated (k, v) covering past + new tokens.
+        """
         B, T, C = x.shape
         qkv = self.c_attn(x)                                              # (B, T, 3C)
         q, k, v = qkv.split(self.n_embd, dim=2)                           # each (B, T, C)
@@ -156,17 +163,24 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, self.head_size).transpose(1, 2)     # (B, nh, T, hs)
         k = k.view(B, T, self.n_head, self.head_size).transpose(1, 2)     # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, self.head_size).transpose(1, 2)     # (B, nh, T, hs)
+        if past_kv is not None:
+            # Past tokens' K and V never change (causal), so reuse them: only the new rows are computed.
+            k = torch.cat([past_kv[0], k], dim=2)                         # (B, nh, S, hs), S = S_past + T
+            v = torch.cat([past_kv[1], v], dim=2)                         # (B, nh, S, hs)
+        S = k.size(2)
 
         # scores[b,h,i,j] = <q_i, k_j> / sqrt(hs): how much token i wants to read from token j
-        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_size)    # (B, nh, T, hs) @ (B, nh, hs, T) -> (B, nh, T, T)
+        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_size)    # (B, nh, T, hs) @ (B, nh, hs, S) -> (B, nh, T, S)
         # Causal mask: forbid j > i by setting those scores to -inf (softmax -> exactly 0).
-        scores = scores.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))  # (B, nh, T, T)
-        attn = F.softmax(scores, dim=-1)                                  # (B, nh, T, T), each row sums to 1
-        attn_d = self.attn_drop(attn)                                     # (B, nh, T, T) dropout on the weights
-        y = attn_d @ v                                                    # (B, nh, T, T) @ (B, nh, T, hs) -> (B, nh, T, hs)
+        # Query row i is the absolute position S - T + i, so use rows [S-T, S) of the mask.
+        scores = scores.masked_fill(self.mask[:, :, S - T:S, :S] == 0, float("-inf"))  # (B, nh, T, S)
+        attn = F.softmax(scores, dim=-1)                                  # (B, nh, T, S), each row sums to 1
+        attn_d = self.attn_drop(attn)                                     # (B, nh, T, S) dropout on the weights
+        y = attn_d @ v                                                    # (B, nh, T, S) @ (B, nh, S, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C)                  # (B, T, nh, hs) -> (B, T, C): concat heads
         y = self.resid_drop(self.c_proj(y))                               # (B, T, C)
-        return y, (attn if return_attn else None)
+        attn = attn if return_attn else None
+        return (y, attn, (k, v)) if use_cache else (y, attn)
 
 
 class MLP(nn.Module):
@@ -202,17 +216,17 @@ class Block(nn.Module):
         self.ln2 = LayerNorm(cfg.n_embd)
         self.mlp = MLP(cfg)
 
-    def forward(self, x: torch.Tensor, return_attn: bool = False):
-        """x: (B, T, C) -> (x: (B, T, C), attn: (B, nh, T, T) or None)."""
+    def forward(self, x: torch.Tensor, return_attn: bool = False, past_kv=None, use_cache: bool = False):
+        """x: (B, T, C) -> (x: (B, T, C), attn or None[, present_kv if use_cache])."""
         if self.norm_position == "pre":
-            a, attn = self.attn(self.ln1(x), return_attn)   # (B, T, C)
+            a, attn, *rest = self.attn(self.ln1(x), return_attn, past_kv, use_cache)   # a: (B, T, C)
             x = x + a                                       # residual
             x = x + self.mlp(self.ln2(x))                   # residual
         else:
-            a, attn = self.attn(x, return_attn)
+            a, attn, *rest = self.attn(x, return_attn, past_kv, use_cache)
             x = self.ln1(x + a)
             x = self.ln2(x + self.mlp(x))
-        return x, attn                                      # (B, T, C)
+        return (x, attn, *rest)                             # x: (B, T, C)
 
 
 # ======================================================================================
@@ -256,17 +270,25 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None, return_attn: bool = False):
+    def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None, return_attn: bool = False,
+                past_kvs: list | None = None, use_cache: bool = False):
         """idx: (B, T) token ids; targets: (B, T) next-token ids or None.
 
-        Returns (logits, loss), or (logits, loss, attns) if return_attn=True, where
-        logits: (B, T, V), loss: scalar or None, attns: list of n_layer tensors (B, nh, T, T).
+        Returns (logits, loss) followed by, in this order and only if requested:
+            attns   (return_attn=True): list of n_layer tensors (B, nh, T, S)
+            presents (use_cache=True):  list of n_layer (k, v) pairs -> pass back as `past_kvs`
+        logits: (B, T, V), loss: scalar or None.
+
+        KV-cache use: `past_kvs` holds keys/values of the first S_past tokens and `idx` only the
+        NEW tokens, which are placed at positions S_past, S_past+1, ...
         """
-        x = self.embed(idx)                                                 # (B, T, C)
-        attns = []
-        for block in self.blocks:
-            x, attn = block(x, return_attn)                                 # (B, T, C)
+        start_pos = 0 if past_kvs is None else past_kvs[0][0].size(2)
+        x = self.embed(idx, start_pos)                                      # (B, T, C)
+        attns, presents = [], []
+        for i, block in enumerate(self.blocks):
+            x, attn, *rest = block(x, return_attn, None if past_kvs is None else past_kvs[i], use_cache)  # x: (B, T, C)
             attns.append(attn)
+            presents.extend(rest)
         x = self.ln_f(x)                                                    # (B, T, C)
         logits = self.lm_head(x)                                            # (B, T, V)
 
@@ -274,7 +296,12 @@ class GPT(nn.Module):
         if targets is not None:
             # cross_entropy wants (N, V) scores and (N,) class ids: flatten batch and time together.
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))  # scalar
-        return (logits, loss, attns) if return_attn else (logits, loss)
+        out = (logits, loss)
+        if return_attn:
+            out += (attns,)
+        if use_cache:
+            out += (presents,)
+        return out
 
     # ---- parameter accounting -------------------------------------------------------
     def param_breakdown(self) -> dict[str, int]:
