@@ -31,6 +31,18 @@ STAGE = re.compile(r"^\s*(\[_|_\]|(Enter|Exit|Exeunt|Re-enter|Flourish|Alarum)\b
 HEADING = re.compile(r"^\s*(ACT|SCENE|Scene|PROLOGUE|EPILOGUE|Dramatis Person|DRAMATIS PERSON)\b")
 
 
+def download(url: str, dest: Path) -> None:
+    """Download to `dest`. Wikimedia (and some other hosts) answer 403 to Python's default user agent, so send a
+    descriptive one; write to a temporary file first so an interrupted download never leaves a broken file behind."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".part")
+    req = urllib.request.Request(url, headers={"User-Agent": "gpt2-from-scratch-data-prep/1.0 (educational project; Python urllib)"})
+    with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
+        while chunk := r.read(1 << 20):
+            f.write(chunk)
+    tmp.replace(dest)
+
+
 def strip_gutenberg(raw: str) -> str:
     start = raw.find("*** START")
     end = raw.find("*** END")
@@ -84,9 +96,8 @@ def main() -> None:
 
     raw_p = Path(a.raw)
     if not raw_p.exists():
-        raw_p.parent.mkdir(parents=True, exist_ok=True)
         print(f"downloading {URL}")
-        urllib.request.urlretrieve(URL, raw_p)
+        download(URL, raw_p)
     tiny = Path(a.tiny).read_text(encoding="utf-8")
     alphabet = set(tiny)
     text = to_tiny_format(strip_gutenberg(raw_p.read_text(encoding="utf-8-sig")), alphabet)

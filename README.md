@@ -56,30 +56,39 @@ residual initialisation. Post-norm (original Transformer) and sinusoidal positio
 
 ## Results
 
-*Current numbers come from small CPU-trained demo models (0.4M parameters, 2,500 steps). They will be replaced by the T4 results.*
+All models below were trained on a free Colab T4 (about 13 minutes each, 3,000 steps).
 
-| model | training data | val loss | val bits/char |
-|---|---|---|---|
-| English | Tiny Shakespeare (1.0M chars) | 1.628 | 2.35 |
-| Amharic | MasakhaNEWS (3.4M chars) | 2.130 | 3.07 |
+| model | training data | parameters | best validation loss | validation bits/char |
+|---|---|---|---|---|
+| English | Tiny Shakespeare (1.0M chars) | 10.8M | 1.454 | 2.10 |
+| English | Complete Works of Shakespeare (4.3M chars) | 10.8M | 1.355 | 1.95 |
+| Amharic | MasakhaNEWS (3.4M chars) | 10.9M | 1.655 | 2.39 |
 
-Sample (English demo model, prompt `ROMEO:`, temperature 0.8):
+The Tiny Shakespeare model overfits: validation loss is lowest at step 1,750 and rises afterwards while training loss keeps falling
+(to 0.91). The saved `ckpt_best.pt` is the step-1,750 model.
+
+Sample (English model, prompt `ROMEO:`, temperature 0.8):
 ```
 ROMEO:
-Why, he cause, Edward's sun heart thou poor part of thy bid with
-to be a fondenimes to your hands, could of shall come to Bohemongbroker of hight
-The rannot fit of false the prayers hath space,
+The present men may be so hit;
+Put upon his falling.
+What is you so join'd, but you gone?
+
+MERCUTIO:
+Menenius, there's a subject that were made,
+With what treasure and hour eyes of the work:
+I see he is a sanctuary of his power
 ```
 
 ### Experiments
 
 | # | question | result |
 |---|---|---|
-| 1 | effect of temperature | higher T: more diverse, more invented words; greedy repeats itself ([exp1](results/exp1_temperature.md)) |
-| 2 | prompt length / context | loss drops from 2.56 at the first character to ~1.6 after ~8 characters of context ([exp2](results/exp2_context.md)) |
-| 3 | train vs validation loss | both still falling at the end; no overfitting yet ([exp3](results/exp3_dynamics.md)) |
-| 4 | architecture (number of layers) | `python experiments/exp4_architecture.py --param n_layer` (runs on the T4) |
-| 9 | what attention heads learn | a previous-token head and a punctuation head ([exp9](results/exp9_attention.md)) |
+| 1 | effect of temperature | greedy decoding repeats 18% of 4-word sequences; at T=0.8, 97.6% of words are real words, at T=1.5 only 78.6% ([exp1](results/exp1_temperature.md)) |
+| 2 | prompt length / context | loss 2.52 with one character of context, 1.63 with up to 8, about 1.46 after that ([exp2](results/exp2_context.md)) |
+| 3 | train vs validation loss | overfitting starts at step 1,750 (best val 1.454, final 1.500) ([exp3](results/exp3_dynamics.md)) |
+| 4 | number of layers (2 / 4 / 6) | val loss 1.585 / 1.544 / 1.526 for 1.6M / 3.2M / 4.8M parameters and 45 / 81 / 140 s ([exp4](results/exp4_n_layer.md)) |
+| 9 | what attention heads learn | three previous-token heads in layer 0 (92-95% on the previous character), a punctuation head in layer 2 (69%) ([exp9](results/exp9_attention.md)) |
 | 11 | Amharic vs English tokenization | see below ([study](results/amharic/tokenizer_analysis.md)) |
 | 12 | small vs full training data | below ([exp12](results/data_scale/data_scale.md)) |
 
@@ -87,9 +96,11 @@ The rannot fit of false the prayers hath space,
 
 | test text | small data | full data |
 |---|---|---|
-| unseen Shakespeare | 2.469 bits/char | **2.253** (8.7% better) |
-| Amharic Wikipedia | 4.188 | **3.525** (15.9% better) |
-| Amharic news | **3.072** | 3.252 (5.9% worse: with the same steps it saw less news) |
+| unseen Shakespeare (T4 models) | 2.311 bits/char | **1.778** (23% better) |
+| Amharic Wikipedia (CPU demo models) | 4.188 | **3.525** (15.9% better) |
+| Amharic news (CPU demo models) | **3.072** | 3.252 (5.9% worse: with the same steps it saw less news) |
+
+The Amharic comparison still uses the small CPU demo models; the T4 full-data Amharic model (`configs/amharic_full.yaml`) is the one run still to do.
 
 ## Amharic (Ge'ez script) study
 

@@ -1,79 +1,86 @@
 # Experiment 2: prompt length and context
 
-Checkpoint `checkpoints/demo_english/ckpt_best.pt`, 500 held-out windows of 128 tokens.
+Checkpoint `app/checkpoints/english/model.pt`, 500 held-out windows of 256 tokens.
 
 ## A. Loss by position in the window
 ![loss by position](exp2_loss_by_position.png)
 
 | positions | mean loss |
 |---|---|
-| 0-0 | 2.5553 |
-| 1-7 | 1.7734 |
-| 8-31 | 1.6325 |
-| 32-63 | 1.6175 |
-| 64-127 | 1.5961 |
+| 0-0 | 2.5212 |
+| 1-7 | 1.6298 |
+| 8-31 | 1.4661 |
+| 32-63 | 1.4625 |
+| 64-127 | 1.4474 |
+| 128-255 | 1.4570 |
 
 ## B. Loss on the 32 tokens after an L-token prompt
 
 | prompt length L | mean loss on next 32 tokens |
 |---|---|
-| 1 | 1.6921 |
-| 2 | 1.6616 |
-| 4 | 1.6336 |
-| 8 | 1.6195 |
-| 16 | 1.6145 |
-| 32 | 1.6194 |
-| 64 | 1.5934 |
-| 96 | 1.5988 |
+| 1 | 1.5349 |
+| 2 | 1.4997 |
+| 4 | 1.4653 |
+| 8 | 1.4572 |
+| 16 | 1.4702 |
+| 32 | 1.4669 |
+| 64 | 1.4448 |
+| 128 | 1.4532 |
 
 ## C. Generations from the same passage with different prompt lengths
 
 ### prompt length 8 tokens
 Prompt:
 ```
-, gentle
+like a s
 ```
 *greedy:*
 ```
- the stand the stand of the stand of the stand,
-And the stand that the stand the stand of the stands,
-And the stand the stand of the stand of the death,
-And the stand the stand of the stand of the dea
+trange of the state,
+And then the state of the sea of the sea
+Where they shall be their state. The senate of them
+The senate of the season of their state,
+Whose they shall be their strength that they 
 ```
 *T=0.8:*
 ```
-man: and cause,
-Either compasses a proceed teath a power bid with to been all;
-These to your hath and your sent soldielden his love?
+lave, her deed,
+Either clouds and in one of eye,--
 
-KING HENRY VI:
-And whom find I farewell, I am we have spake thou s
+ROMEO:
+Give me that a minster servant have;
+That my mouth hath company 'God of the queen!'
+And methinks I mine ears of the prayers
+May be grave's be
 ```
 
 ### prompt length 32 tokens
 Prompt:
 ```
-elcome, good Cambio.
-But, gentle
+ sir, methinks you walk like a s
 ```
 *greedy:*
 ```
-man:
-I will the stand the stand the stand of the stand of the stand,
-And the stand the stand of the stand of the death,
-And the stand the stand of the stand of the death,
-And the stand the stand of th
+trange of the world,
+And then the sea of the sea of the sea
+Whose senate was the sea of the season of the world,
+Whose sense state and the season of the sea
+Whose several strokes and the season of the
 ```
 *T=0.8:*
 ```
-man: an the enemy honour's nature
-To of more of thee with in the temption of seeigns
-As your had in thy more shake collains of the way's of England,
-And whom find say to go the common the seats,
-Or be
+lave, here dear
+Either clouds was in one of eye,--
+
+Second Gentleman:
+That's sentenced, your honour, my mother, sir.
+
+First Gentleman:
+There is the every noble thief and good to the people:
+I see, I w
 ```
 
-### prompt length 96 tokens
+### prompt length 128 tokens
 Prompt:
 ```
 ept his service.
@@ -81,25 +88,29 @@ ept his service.
 BAPTISTA:
 A thousand thanks, Signior Gremio.
 Welcome, good Cambio.
-But, gentle
+But, gentle sir, methinks you walk like a s
 ```
 *greedy:*
 ```
-man:
-I will the stand the death of the stand of the death,
-And the stand the stand of the stand of the death,
-And the stand the stand of the stand of the death,
-And the stand the stand of the stand of
+trange to the word.
+
+CAMILLO:
+I would they say 'tis true.
+
+CAMILLO:
+I would they say 'tis the matter.
+
+CAMILLO:
+I would they say 'tis the matter.
+
+CLAUDIO:
+The matter that I have seen them so far that
 ```
 *T=0.8:*
 ```
-man:
-And cannot Edward's sun heads and thoughts, and with is with this
-make not imself flay that in thy more shake collainst so of the news.
-
-AUTOLYCUS:
-And if this father, truth.
-
-JULIET:
-Happy took 
+lave,
+Set deep a fair root as each another gentleman:
+I do come to sit a main on my country:
+Speak not thou servicess laid, as thou art not like too:
+The nobility storms of truth. What still thou, I w
 ```

@@ -2,40 +2,40 @@
  "English": {
   "models": {
    "small data: Tiny Shakespeare": {
-    "checkpoint": "checkpoints\\demo_english\\ckpt_best.pt",
+    "checkpoint": "app/checkpoints/english/model.pt",
     "train_chars": 1003854,
-    "params": 421504,
+    "params": 10770816,
     "vocab": 65,
     "tests": {
      "unseen Shakespeare": {
-      "bits_per_char": 2.469110379806822,
-      "nats_per_token": 1.711463744109371,
+      "bits_per_char": 2.31148637209264,
+      "nats_per_token": 1.602206670545432,
       "tokens": 250000,
       "chars": 250000,
       "dropped_share": 0.0
      }
     },
-    "valid_words": 0.9158834483474934,
-    "distinct_2": 0.9937104430379747,
-    "sample": "ROMEO:\nClarence been the for your busing more at thou slook shalt\nShe good from what all deters not pleased me:\nI'll came of thy king what shall against come, I be my that\nTo have long to with all that his land moness--\n\nISABELLA:\nHe king me, then is you have the best royal is curror?\n\nSecond Mercutio, and here can:\nThou she'st to none, the shall aimely do a delive-hath\nTo take your courself soul part re"
+    "valid_words": 0.9767141278367473,
+    "distinct_2": 0.9932432432432432,
+    "sample": "ROMEO:\nClarence before than the chastitors that art words.\nIs it tell it? thou comest on the joy of thee?\n\nHASTINGS:\nHave we been upon thy shame against the house,\nUnless those gadly not thy success?\n\nGLOUCESTER:\nI have such a word to bear with their spost sweet.\n\nGLOUCESTER:\nThey from my deserves he hath prefer'd thee from his life.\n\nLADY ANNE:\nPeace, so may I love a churchyard.\nWhy now they must stand "
    },
    "full data: Complete Works": {
-    "checkpoint": "checkpoints\\demo_english_full\\ckpt_best.pt",
+    "checkpoint": "app/checkpoints/english_full/model.pt",
     "train_chars": 4347162,
-    "params": 421376,
+    "params": 10770432,
     "vocab": 64,
     "tests": {
      "unseen Shakespeare": {
-      "bits_per_char": 2.2531716534673114,
-      "nats_per_token": 1.5617858260617612,
+      "bits_per_char": 1.7780048782190667,
+      "nats_per_token": 1.2324239980553673,
       "tokens": 250000,
       "chars": 250000,
       "dropped_share": 0.0
      }
     },
-    "valid_words": 0.9114797545034274,
-    "distinct_2": 0.9820178848680496,
-    "sample": "ROMEO:\nAy, thou art I would will thy chose world\nFor in the grose out you find that my father come. I will your feety contends,\nHe most the speak men, and them with my grave to me, shall at your lord.\n\nCLOWN:\nI this by you honester to withing; or honour are to gods,\nStruly soundle what the face this me, dreason,\nI will as them fall of him\nMine crown thou art your that or to most me stand.\n\nEDGAR:\nO, I th"
+    "valid_words": 0.9804227304227304,
+    "distinct_2": 0.9933748683748684,
+    "sample": "ROMEO:\nAy, thou art to say I to offence thou say'st,\nAnd thou tend'st my fortune from business.\n\nROMEO:\nThere is my lady that favours doth put it me.\n\nPANDARUS:\nAy, my good lord, thy lord, well sent her\nTo th' expectation of my heart.\n\nROMEO:\nNot so, I bid it ride it.\n\nROMEO:\nProve I thee say she is mine, thou wilt not find\nThe best knight in the country of my purpose,\nLet those great conquering charges "
    }
   },
   "tests": [
@@ -46,7 +46,7 @@
  "Amharic": {
   "models": {
    "small data: news": {
-    "checkpoint": "checkpoints\\demo_amharic\\ckpt_best.pt",
+    "checkpoint": "checkpoints/demo_amharic/ckpt_best.pt",
     "train_chars": 3375548,
     "params": 461440,
     "vocab": 377,
@@ -71,7 +71,7 @@
     "sample": "የኢትዮጵያ ሚንስትሩ ገቢ አሲተያየቱም የተባሉት እንደሚሆን ከፍተኛ ነው። የቀድሞው ስምምነት ቡድኑ መመተው የነሐሴ ጨዋታ ለህዝብ የመጨረሻ አጣጣሪ ማዕከላት በአዋቂ ደግሞ ባለፈው ዓመት ላይ ሲሆን በማጠናቀቅ አዳዲስ አደጋ ወደዚህ ውይይት ብቻ ተከትሎ መካከል ነው። አፍሪካ ፕሬዝዳንት ይህ የሆነው በምርጫ ተመልክቷል። መሞታቸውን ጠቅላይ ሚኒስትር የሚያስፈልገው ዶ/ር እና ዲሞክራሲያ ሁኔታ አትሌቶች በበኩላቸውን እንዲሁም መቃወም በቤተሰቦቻቸው አሊያም ተደርጓል። ከሰላም ጋር በአሜሪካ አገሪቱን የሚያስወጣው ክትባት እንዲዘገባ ከአስርት የዋጋ ሁኔታ ያደረጉ ወደ 15 ብር ለኢትዮጵያ ለቢቢሲ ከፍተኛ ያለው የሚወደው ግራች የሆኑት የካናዳ የተባለው በፌ"
    },
    "full data: Wikipedia + news": {
-    "checkpoint": "checkpoints\\demo_amharic_full\\ckpt_best.pt",
+    "checkpoint": "checkpoints/demo_amharic_full/ckpt_best.pt",
     "train_chars": 9909215,
     "params": 476160,
     "vocab": 492,

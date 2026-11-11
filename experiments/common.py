@@ -50,7 +50,7 @@ def default_device() -> str:
 def load_bundle(ckpt: str | Path, device: str):
     """-> (model, checkpoint dict, tokenizer, data_dir)."""
     model, ck = load_model(ckpt, device)
-    data_dir = data_dir_from_config(ck["config"]["data"])
+    data_dir = data_dir_from_config((ck.get("config") or {}).get("data") or ck["data"])   # full or exported checkpoint
     tok = tokenizer_for_checkpoint(ck, ckpt)
     return model, ck, tok, data_dir
 

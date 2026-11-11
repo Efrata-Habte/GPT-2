@@ -30,6 +30,18 @@ ETHIOPIC = re.compile(r"[ሀ-፿ᎀ-᎟ⶀ-⷟꬀-꬯]")
 ALLOWED = re.compile(r"[^ሀ-፿ᎀ-᎟ⶀ-⷟꬀-꬯\x20-\x7E\n«»“”‘’–—…]")
 
 
+def download(url: str, dest: Path) -> None:
+    """Download to `dest`. Wikimedia (and some other hosts) answer 403 to Python's default user agent, so send a
+    descriptive one; write to a temporary file first so an interrupted download never leaves a broken file behind."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".part")
+    req = urllib.request.Request(url, headers={"User-Agent": "gpt2-from-scratch-data-prep/1.0 (educational project; Python urllib)"})
+    with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
+        while chunk := r.read(1 << 20):
+            f.write(chunk)
+    tmp.replace(dest)
+
+
 def clean_wikitext(t: str) -> str:
     t = re.sub(r"<!--.*?-->", "", t, flags=re.S)
     t = re.sub(r"<ref[^>]*/>", "", t)
@@ -90,9 +102,8 @@ def main() -> None:
 
     dump = Path(a.dump)
     if not dump.exists():
-        dump.parent.mkdir(parents=True, exist_ok=True)
         print(f"downloading {URL}")
-        urllib.request.urlretrieve(URL, dump)
+        download(URL, dump)
 
     n_pages, articles = 0, []
     for title, wikitext in iter_articles(dump):

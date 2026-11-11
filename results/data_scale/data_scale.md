@@ -6,42 +6,52 @@ Same architecture, same number of steps and the same seed; only the training dat
 
 | model | training chars | params | test bits/char: unseen Shakespeare | valid words (T=0.8) | distinct-2 |
 |---|---|---|---|---|---|
-| small data: Tiny Shakespeare | 1,003,854 | 421,504 | 2.469 | 91.6% | 0.99 |
-| full data: Complete Works | 4,347,162 | 421,376 | 2.253 | 91.1% | 0.98 |
+| small data: Tiny Shakespeare | 1,003,854 | 10,770,816 | 2.311 | 97.7% | 0.99 |
+| full data: Complete Works | 4,347,162 | 10,770,432 | 1.778 | 98.0% | 0.99 |
 
-Full-data model vs small-data model on the shared test text: unseen Shakespeare: 8.7% better. Characters removed from the test text because one model never saw them: unseen Shakespeare: 0.00%.
+Full-data model vs small-data model on the shared test text: unseen Shakespeare: 23.1% better. Characters removed from the test text because one model never saw them: unseen Shakespeare: 0.00%.
 
 **small data: Tiny Shakespeare** (prompt `ROMEO:`, T=0.8, seed 1337)
 ```
 ROMEO:
-Clarence been the for your busing more at thou slook shalt
-She good from what all deters not pleased me:
-I'll came of thy king what shall against come, I be my that
-To have long to with all that his land moness--
+Clarence before than the chastitors that art words.
+Is it tell it? thou comest on the joy of thee?
 
-ISABELLA:
-He king me, then is you have the best royal is curror?
+HASTINGS:
+Have we been upon thy shame against the house,
+Unless those gadly not thy success?
 
-Second Mercutio, and here can:
-Thou she'st to none, the shall aimely do a delive-hath
-To take your courself soul part re
+GLOUCESTER:
+I have such a word to bear with their spost sweet.
+
+GLOUCESTER:
+They from my deserves he hath prefer'd thee from his life.
+
+LADY ANNE:
+Peace, so may I love a churchyard.
+Why now they must stand 
 ```
 
 **full data: Complete Works** (prompt `ROMEO:`, T=0.8, seed 1337)
 ```
 ROMEO:
-Ay, thou art I would will thy chose world
-For in the grose out you find that my father come. I will your feety contends,
-He most the speak men, and them with my grave to me, shall at your lord.
+Ay, thou art to say I to offence thou say'st,
+And thou tend'st my fortune from business.
 
-CLOWN:
-I this by you honester to withing; or honour are to gods,
-Struly soundle what the face this me, dreason,
-I will as them fall of him
-Mine crown thou art your that or to most me stand.
+ROMEO:
+There is my lady that favours doth put it me.
 
-EDGAR:
-O, I th
+PANDARUS:
+Ay, my good lord, thy lord, well sent her
+To th' expectation of my heart.
+
+ROMEO:
+Not so, I bid it ride it.
+
+ROMEO:
+Prove I thee say she is mine, thou wilt not find
+The best knight in the country of my purpose,
+Let those great conquering charges 
 ```
 
 ## Amharic

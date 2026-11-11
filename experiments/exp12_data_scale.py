@@ -66,9 +66,11 @@ def shared_text(text: str, toks: list) -> tuple[str, float]:
     return kept, 1 - len(kept) / max(1, len(text))
 
 
-def train_chars(ckpt: Path) -> int | None:
+def train_chars(ckpt: Path, ck: dict | None = None) -> int | None:
     meta = ckpt.parent / "meta.json"
-    return json.loads(meta.read_text(encoding="utf-8"))["train_chars"] if meta.exists() else None
+    if meta.exists():
+        return json.loads(meta.read_text(encoding="utf-8"))["train_chars"]
+    return ((ck or {}).get("meta") or {}).get("meta", {}).get("train_chars")   # exported checkpoint
 
 
 def sample_quality(model, tok, prompt: str, dictionary: set[str], n: int = 4, tokens: int = 400, seed: int = 1337) -> dict:
@@ -111,7 +113,7 @@ def main() -> None:
             p = Path(path)
             if p.exists():
                 m, ck = load_model(p, dev)
-                loaded[name] = (m, tokenizer_for_checkpoint(ck, p), p)
+                loaded[name] = (m, tokenizer_for_checkpoint(ck, p), p, ck)
             else:
                 print(f"[skip] {lang} / {name}: {p} not found")
         if len(loaded) < 2:
@@ -124,13 +126,13 @@ def main() -> None:
         rows, lang_res = [], {"models": {}, "tests": list(tests), "prompt": prompt}
         for test_name, test_path in tests.items():
             raw = Path(test_path).read_text(encoding="utf-8")[: a.max_chars]
-            text, dropped = shared_text(raw, [t for _, t, _ in loaded.values()])
-            for name, (m, t, p) in loaded.items():
+            text, dropped = shared_text(raw, [t for _, t, _, _ in loaded.values()])
+            for name, (m, t, p, ck) in loaded.items():
                 r = test_bits_per_char(m, t, text, dev)
-                lang_res["models"].setdefault(name, {"checkpoint": str(p), "train_chars": train_chars(p), "params": m.num_params(),
+                lang_res["models"].setdefault(name, {"checkpoint": str(p).replace("\\", "/"), "train_chars": train_chars(p, ck), "params": m.num_params(),
                                                       "vocab": t.vocab_size, "tests": {}})["tests"][test_name] = {**r, "dropped_share": dropped}
                 print(f"{lang:8s} {name:32s} {test_name:22s} {r['bits_per_char']:.3f} bits/char")
-        for name, (m, t, p) in loaded.items():
+        for name, (m, t, p, _) in loaded.items():
             lang_res["models"][name].update(sample_quality(m, t, prompt, dictionary))
         names = list(lang_res["models"])
         for name in names:

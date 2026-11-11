@@ -1,15 +1,15 @@
 # Experiment 1: temperature
 
-Checkpoint `checkpoints/demo_english/ckpt_best.pt`, prompt `'ROMEO:'`, 8 samples x 400 new tokens per setting, seed 1337 (same seed for every setting). Metrics are averaged over samples. Greedy gives one deterministic text, so all its samples are identical.
+Checkpoint `app/checkpoints/english/model.pt`, prompt `'ROMEO:'`, 8 samples x 400 new tokens per setting, seed 1337 (same seed for every setting). Metrics are averaged over samples. Greedy gives one deterministic text, so all its samples are identical.
 
 | setting | distinct-1 | distinct-2 | repetition-4 | valid words |
 |---|---|---|---|---|
-| greedy | 0.105 | 0.165 | 0.675 | 1.000 |
-| T=0.2 | 0.358 | 0.663 | 0.046 | 0.972 |
-| T=0.5 | 0.597 | 0.956 | 0.000 | 0.970 |
-| T=0.8 | 0.770 | 0.995 | 0.000 | 0.885 |
-| T=1.0 | 0.850 | 0.998 | 0.000 | 0.828 |
-| T=1.5 | 0.930 | 1.000 | 0.000 | 0.576 |
+| greedy | 0.395 | 0.613 | 0.178 | 0.961 |
+| T=0.2 | 0.460 | 0.734 | 0.055 | 0.997 |
+| T=0.5 | 0.661 | 0.951 | 0.002 | 0.994 |
+| T=0.8 | 0.765 | 0.985 | 0.000 | 0.976 |
+| T=1.0 | 0.821 | 0.993 | 0.000 | 0.945 |
+| T=1.5 | 0.922 | 1.000 | 0.000 | 0.786 |
 
 ![temperature](exp1_temperature.png)
 
@@ -18,108 +18,121 @@ Checkpoint `checkpoints/demo_english/ckpt_best.pt`, prompt `'ROMEO:'`, 8 samples
 **greedy**
 ```
 ROMEO:
-I will the stand the stand of the stand of the stand the stands
-That the stand the stand of the stand of the stands,
-And the stand of the stand of the death,
-And the stand that the stand of the stand of the death,
-And the stand that the stand of the stand of the death,
-And the stand the stand of the stand of the death,
-And the stand that the stand of the stand of the death,
-And the stand that the
+The matter of the man that hath some strange the world,
+And then the sea of the sea of the sea
+Whose senate was the sea of the season of the sea
+Whose they have stand'd their state and their heads their state,
+And therefore their services their states of their state,
+And then they shall be their strength their state,
+Which they shall be their strength their state,
+And then they shall be their str
 ```
 
 **T=0.2**
 ```
 ROMEO:
-I will be so should the present of the death,
-And the contraction of the lady of the death,
-And the tread of his father state of the world of the sealth,
-And the will the world hath of the world of the prince,
-And the stand that the provereign of the bearts of the duke
-That of the proceed of the be some of the part,
-And the set the confence of the courtent of the father,
-That the shall be stand t
+The more is the matter of the world.
+
+PAULINA:
+I would they do them so so hot.
+
+LEONTES:
+The prince there's a man's heart.
+
+LEONTES:
+The devil of the world,
+And the people's body to the people's death,
+And there's a strange that the promise of the world,
+The senate of the death of the people's son,
+And the senators of the morning of the people's words,
+And the morning of the streets of the state,
 ```
 
 **T=0.5**
 ```
 ROMEO:
-The present to on the world that from and life of his cours.
+The prince thereof the silent lamentable,
+Whom they cannot lean them breathe of the ground,
+And then tender them to the sea that their suns
+And make peace their tender to them all accused.
+These one that heart is the duke that would not bear
+The sea of my son are sure and death of a beauty
+With weed some body and like a fair charity.
 
-LUCIO:
-The life with had not so show stand the will and from to leave
-That his the hand was to the neither?
-
-LUCIO:
-I am they know should me the not to more, and the world
-And be venger from my son of the consuld of more unto to the king live,
-To have the seasure set all the common of will in my life.
-
-FLORIZEL:
-I am the king, the lost
+BUCKINGHAM:
+I will make him of all any true here;
+And then he 
 ```
 
 **T=0.8**
 ```
 ROMEO:
-The present me of your sorrowless of man,
-Who so? Camily your good marrel hath the had news'd.
+The present men may be so hit;
+Put upon his falling.
+What is you so join'd, but you gone?
 
-ISABELLA:
-It will a truth.
+MERCUTIO:
+Menenius, there's a subject that were made,
+With what treasure and hour eyes of the work:
+I see he is a sanctuary of his power
+To be that dives her for my worship, my good dear mother
+Until he is a bloody born.
 
-Third Citizen:
-What, he speak unto the nature.
-
-DUKE VINCENTIO:
-The souls rememberant interning away;
-I would to underledge for my lord: thou requittle this cruly
-Thou not weep the wailst of like as I find; like the smill'd will is?
+BRUTUS:
+I will they take an our most accident.
 
 SICINIUS:
-You are to here to us, the ligh
+I do beseech you, not they w
 ```
 
 **T=1.0**
 ```
 ROMEO:
-The pity is much sations of that from and justly?
-Come, let knock and is like with his neck's.
+The present men may be so hit;
+Put me and joy on what cannot cut off.
+
+LUCENTIO:
+O, gentle say,
+I with him.
 
 ISABELLA:
-It will a truth.
+My friend urge is right embraced,--
 
-TRANIO:
-Citizens toes me peace their non,
-That with is hath would me suopsrenself an piltient.
-Our hath wold fooluth veens may:
-My lord of there,
-Intime his cruly thou not weep so.
-This signiorates. What, silrown? What he how I
-will this to of body gold.
+DUKE VINCENTIO:
+Upon his country's westoodry.
 
-Nurse:
-Bing let my 
+Provost:
+
+DUKE VINCENTIO:
+So, fool, dive I had no mouse: he thus away.
+I know not you on't it.
+
+DUCHESS OF YORK:
+Romeo. What, seldom, what he is with it?
+
+DUKE OF YORK:
+These are true unnity to cr
 ```
 
 **T=1.5**
 ```
 ROMEO:
-TElBz-day, then my fortline ell: freen!
+TElY:-
+Of you torture this is now relugable folly;
+But your knee broaches hard-take gentlem's sake,
+Pain-vutaa to a terrow's?
+Farewell: make them sended,
+Were then, testimoner in:--Do wnowing'd upon
+Either for Clifford, away; I wot oft away.
 
-LEONTES:
-CloWe'll lock is armies; I prince gentleman.
+POMPEY::
+My lord, that repairtiest most uneven, an if.--
 
-ISABELLA:
-It with a truth.
+Clown:
+Enorious!
+Weap what, seldomn? What news will it? thish moverbook
+Your.
 
-TRANIO:
-Citizes
-My ember's madutiege, ni, great bebail:--Do wought I slow
-reise? Manted then thrumph;
-Is to contrued veens may: my love other requint
-me pioccause thou'n it.-
-What. This simpely seasureful self trua,
-By very will it; this thou, booked wrongs?
-What infolttlest
+Nurse:
+Binfold, you
 ```

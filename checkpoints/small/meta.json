@@ -1,5 +1,7 @@
 {
   "tokenizer": "char",
+  "normalize": "none",
+  "bpe_train_chars": null,
   "vocab_size": 65,
   "train_tokens": 1003854,
   "val_tokens": 111540,
