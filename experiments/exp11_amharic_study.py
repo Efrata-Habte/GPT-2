@@ -24,7 +24,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from experiments.common import COLORS, enter_repo_root, md_table, plt, read_log, series, write_report
+from experiments.common import COLORS, enter_repo_root, first_existing, md_table, plt, read_log, series, write_report
 from experiments.exp1_temperature import words_of
 
 import torch
@@ -164,10 +164,12 @@ def main() -> None:
     ap.add_argument("--max_chars", type=int, default=1_000_000)
     ap.add_argument("--vocab_sizes", type=int, nargs="+", default=[500, 1000, 4000])
     ap.add_argument("--normalize", default="homophones")
-    ap.add_argument("--runs", nargs="*", default=["English (char)=checkpoints/demo_english", "Amharic (char)=checkpoints/demo_amharic",
-                                                 "Amharic normalized (char)=checkpoints/demo_amharic_norm"],
-                    help="label=run_dir of trained models for Part 4")
-    ap.add_argument("--sample_run", default="checkpoints/demo_amharic", help="Amharic model used for Part 5 samples")
+    t4 = Path("checkpoints/small/summary.json").exists() and Path("checkpoints/amharic/summary.json").exists()
+    ap.add_argument("--runs", nargs="*", default=(["English=checkpoints/small", "Amharic=checkpoints/amharic"] if t4 else
+                                                 ["English (CPU demo)=checkpoints/demo_english", "Amharic (CPU demo)=checkpoints/demo_amharic"]),
+                    help="label=run_dir of trained models for Part 4 (default: the T4 models if trained, else the CPU demo models)")
+    ap.add_argument("--sample_run", default=first_existing("checkpoints/amharic/ckpt_best.pt", "checkpoints/demo_amharic/ckpt_best.pt").rsplit("/", 1)[0],
+                    help="Amharic model used for Part 5 samples")
     ap.add_argument("--sample_prompt", default="የኢትዮጵያ ")   # የኢትዮጵያ
     ap.add_argument("--temps", type=float, nargs="+", default=[0.5, 0.8, 1.0, 1.3])
     ap.add_argument("--sample_tokens", type=int, default=300)
@@ -383,7 +385,7 @@ def main() -> None:
         rows = []
         for label, c in runs.items():
             s = c["summary"]
-            lang = "English" if label.startswith("English") else "Amharic (normalized)" if "normalized" in label else "Amharic"
+            lang = "English" if label.startswith("English") else "Amharic"
             bpc = c["val_bpc"][-1]
             bits_per_byte = bpc / stats[lang]["bytes_per_char"]                     # bytes of UTF-8 text
             bits_per_word = bpc * 100 / stats[lang]["words_per_100_chars"]           # letter-words, see words_of()
@@ -413,10 +415,8 @@ def main() -> None:
                      "**Reading the three units.** Bits per *character* is what the assignment asks for, but characters are not equally informative: "
                      "a Ge'ez letter is a consonant+vowel syllable (2.58 UTF-8 bytes on average here, against 1.00 for English), so it naturally costs more "
                      "bits than a Latin letter. Bits per *byte* normalises for the encoding and bits per *word* for the amount of text; "
-                     "use the unit that matches the claim you want to make. The two Amharic rows differ only in normalization.",
-                     "![bpc](bpc_comparison.png)",
-                     "Caveat: the normalized model is scored on normalized text, which is easier by construction (fewer distinct spellings), "
-                     "so its bits/char are not a like-for-like comparison with the raw model; they show the size of the effect on the same corpus."]
+                     "use the unit that matches the claim you want to make.",
+                     "![bpc](bpc_comparison.png)"]
     else:
         sections.append("## Trained models\n\nNo trained runs found; train with `configs/demo_amharic.yaml` (or `configs/amharic.yaml` on a GPU).")
 

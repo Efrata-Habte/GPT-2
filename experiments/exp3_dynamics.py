@@ -1,7 +1,7 @@
-"""Experiment 3: training dynamics. Train vs. validation loss and where overfitting starts.
+"""Experiment 3: training dynamics. Train vs. validation loss of a finished training run, and where overfitting starts.
 
-    python experiments/exp3_dynamics.py                      # trains configs/exp_overfit.yaml (if needed), then analyses
-    python experiments/exp3_dynamics.py --log checkpoints/small/log.csv   # analyse an existing run only
+    python experiments/exp3_dynamics.py                                   # the main model: checkpoints/small/log.csv
+    python experiments/exp3_dynamics.py --log checkpoints/amharic/log.csv
 """
 from __future__ import annotations
 
@@ -12,8 +12,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from experiments.common import COLORS, enter_repo_root, md_table, plt, read_log, series, write_report
 
-from src.train import train
-from src.utils import apply_overrides, load_config
 
 
 def analyze_overfitting(rows: list[dict], margin: float = 0.02, gap_threshold: float = 0.05) -> dict:
@@ -42,23 +40,11 @@ def analyze_overfitting(rows: list[dict], margin: float = 0.02, gap_threshold: f
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default="configs/exp_overfit.yaml")
-    ap.add_argument("--set", nargs="*", default=[])
-    ap.add_argument("--log", default=None, help="analyse this log.csv instead of training")
+    ap.add_argument("--log", default="checkpoints/small/log.csv", help="log.csv of a finished training run")
     ap.add_argument("--out", default="results")
-    ap.add_argument("--force", action="store_true")
     a = ap.parse_args()
     enter_repo_root()
-
-    if a.log:
-        log_path, name = Path(a.log), Path(a.log).parent.name
-    else:
-        cfg = apply_overrides(load_config(a.base), a.set)
-        log_path, name = Path(cfg["train"]["out_dir"]) / "log.csv", Path(cfg["train"]["out_dir"]).name
-        if a.force or not (log_path.parent / "summary.json").exists():
-            train(cfg)
-        else:
-            print(f"reusing finished run in {log_path.parent} (use --force to retrain)")
+    log_path, name = Path(a.log), Path(a.log).parent.name
     rows = read_log(log_path)
     r = analyze_overfitting(rows)
 

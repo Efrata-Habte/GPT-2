@@ -8,7 +8,6 @@ from experiments.common import run_variants
 from experiments.exp1_temperature import distinct_n, repetition_rate, valid_word_rate, words_of
 from experiments.exp2_context import per_position_loss
 from experiments.exp3_dynamics import analyze_overfitting
-from experiments.exp8_scaling import fit_power_law
 from experiments.exp9_attention import head_statistics, label_head
 from src.data import load_data, prepare_dataset
 from src.model import GPT, GPTConfig
@@ -55,13 +54,6 @@ def test_overfitting_detected():
 def test_no_overfitting_when_val_keeps_improving():
     r = analyze_overfitting(rows([(0, 4.0, 4.0), (100, 2.0, 2.0), (200, 1.5, 1.52)]))
     assert not r["overfits"] and r["best_step"] == 200 and r["gap_open_step"] is None
-
-
-# ---------------- exp8 ----------------
-def test_power_law_fit_recovers_exponent():
-    N = [1e5, 1e6, 1e7, 1e8]
-    slope, icpt = fit_power_law(N, [3.0 * n ** -0.1 for n in N])
-    assert slope == pytest.approx(-0.1, abs=1e-9) and math.exp(icpt) == pytest.approx(3.0)
 
 
 # ---------------- exp9 head statistics ----------------
@@ -112,7 +104,6 @@ def test_run_variants_trains_caches_and_handles_divergence(tmp_path):
     res = run_variants(base, variants, tmp_path / "runs")
     assert [r["status"] for r in res] == ["ok", "ok"] and res[1]["params"] > res[0]["params"]
     assert all((r["dir"] / "log.csv").exists() for r in res)
-    assert "grad_norm" in (res[0]["dir"] / "log.csv").read_text().splitlines()[0]
     again = run_variants(base, variants, tmp_path / "runs")
     assert [r["status"] for r in again] == ["cached", "cached"]
     base["train"]["max_iters"] = 12                                   # changed config -> must retrain
@@ -120,37 +111,6 @@ def test_run_variants_trains_caches_and_handles_divergence(tmp_path):
     diverge = run_variants(base, [{"name": "boom", "overrides": {"train.lr": 1e30, "train.grad_clip": 1e30}}], tmp_path / "runs")
     assert diverge[0]["status"] in ("diverged", "ok")                  # either is acceptable; it must not crash the sweep
     assert json.loads((res[0]["dir"] / "summary.json").read_text())["params"] == res[0]["params"] or True
-
-
-# ---------------- exp10 (Amharic) ----------------
-def test_char_coverage():
-    from experiments.exp10_amharic import char_coverage
-    assert char_coverage("aaaabbc", 0.5) == 1          # 'a' alone is 4/7 of the text
-    assert char_coverage("aaaabbc", 0.8) == 2
-    assert char_coverage("aaaabbc", 1.0) == 3
-
-
-def test_fragment_stats_and_token_view_on_geez():
-    from experiments.exp10_amharic import fragment_stats, show_tokens
-    from src.tokenizer import BPETokenizer
-    text = "ሰላም ለዓለም። ሰላም ነው። እንዴት ነህ? " * 40
-    small, big = BPETokenizer(), BPETokenizer()
-    small.train(text, 262)                               # only 6 merges: Ge'ez characters stay split into bytes
-    big.train(text, 400)
-    fs_small = fragment_stats(small, small.encode(text), text)
-    fs_big = fragment_stats(big, big.encode(text), text)
-    assert fs_small["fragment_share"] > 0.3 and fs_small["own_token_share"] < 0.9
-    assert fs_big["fragment_share"] < fs_small["fragment_share"] and fs_big["own_token_share"] > fs_small["own_token_share"]
-    assert "<" in show_tokens(small, small.encode("ሰላም"))      # raw byte fragments are shown as <hex>
-    assert fragment_stats(big, big.encode("hello world"), "hello world")["fragment_share"] == 0.0   # ASCII never fragments
-
-
-def test_params_for_vocab_matches_real_model():
-    from experiments.exp10_amharic import params_for_vocab
-    cfg = dict(n_layer=2, n_head=2, n_embd=32, block_size=16, dropout=0.0)
-    total, share = params_for_vocab(cfg, 500)
-    assert total == GPT(GPTConfig(vocab_size=500, **cfg)).num_params()
-    assert 0 < share < 1
 
 
 def test_exp1_word_regex_handles_geez():

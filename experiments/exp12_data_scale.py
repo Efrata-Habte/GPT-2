@@ -8,9 +8,7 @@ are scored on the SAME held-out test text that neither saw in training (data/tes
 Characters that one of the models has never seen are removed from the test text for both (reported), so the two
 models are scored on identical strings.
 
-    python experiments/exp12_data_scale.py                                   # CPU demo models
-    python experiments/exp12_data_scale.py --english_small checkpoints/small/ckpt_best.pt --english_full checkpoints/small_full/ckpt_best.pt \
-        --amharic_small checkpoints/amharic/ckpt_best.pt --amharic_full checkpoints/amharic_full/ckpt_best.pt --out results/data_scale_t4
+    python experiments/exp12_data_scale.py      # uses checkpoints/{small,small_full,amharic,amharic_full} if trained, else the CPU demo models
 """
 from __future__ import annotations
 
@@ -21,7 +19,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from experiments.common import COLORS, default_device, enter_repo_root, md_table, plt, write_report
+from experiments.common import COLORS, default_device, enter_repo_root, first_existing, md_table, plt, write_report
 from experiments.exp1_temperature import distinct_n, valid_word_rate, words_of
 
 import torch
@@ -84,10 +82,11 @@ def sample_quality(model, tok, prompt: str, dictionary: set[str], n: int = 4, to
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--english_small", default="checkpoints/demo_english/ckpt_best.pt")
-    ap.add_argument("--english_full", default="checkpoints/demo_english_full/ckpt_best.pt")
-    ap.add_argument("--amharic_small", default="checkpoints/demo_amharic/ckpt_best.pt")
-    ap.add_argument("--amharic_full", default="checkpoints/demo_amharic_full/ckpt_best.pt")
+    # defaults: the T4 models if they exist, otherwise the CPU demo models
+    ap.add_argument("--english_small", default=first_existing("checkpoints/small/summary.json", "checkpoints/demo_english/ckpt_best.pt").replace("summary.json", "ckpt_best.pt"))
+    ap.add_argument("--english_full", default=first_existing("checkpoints/small_full/summary.json", "checkpoints/demo_english_full/ckpt_best.pt").replace("summary.json", "ckpt_best.pt"))
+    ap.add_argument("--amharic_small", default=first_existing("checkpoints/amharic/summary.json", "checkpoints/demo_amharic/ckpt_best.pt").replace("summary.json", "ckpt_best.pt"))
+    ap.add_argument("--amharic_full", default=first_existing("checkpoints/amharic_full/summary.json", "checkpoints/demo_amharic_full/ckpt_best.pt").replace("summary.json", "ckpt_best.pt"))
     ap.add_argument("--max_chars", type=int, default=250_000, help="per test set (speed)")
     ap.add_argument("--out", default="results/data_scale")
     a = ap.parse_args()

@@ -1,6 +1,5 @@
-# Experiment 4 (architecture sweep). exp4_architecture.py varies ONE of model.n_layer {2,4,6}, model.n_head {1,2,4,8}
-# (use --set model.n_embd=384 --values 1 2 4 6 for the assignment's {1,2,4,6}), model.n_embd {128,256,384}; all else fixed.
-# Shared settings (data, steps, seed) are identical across experiments 4-8; see configs/exp_base.yaml.
+# Experiment 4 (architecture sweep): a cheaper base than small.yaml (half the context, half the steps) so the 3 runs of
+# a sweep fit a T4 session. exp4_architecture.py varies ONE of model.n_layer {2,4,6}, model.n_head, model.n_embd.
 model:
   n_layer: 4
   n_head: 4

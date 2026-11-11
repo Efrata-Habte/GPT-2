@@ -1,34 +1,23 @@
 model,step,train_bpc,val_bpc
-English (char),0,6.05432,6.04785
-English (char),250,3.30613,3.36376
-English (char),500,2.73812,2.94670
-English (char),750,2.46271,2.72083
-English (char),1000,2.33197,2.60698
-English (char),1250,2.24547,2.52401
-English (char),1500,2.18102,2.46098
-English (char),1750,2.13452,2.42174
-English (char),2000,2.09385,2.38289
-English (char),2250,2.07070,2.36380
-English (char),2500,2.05399,2.34842
-Amharic (char),0,8.60197,8.60168
-Amharic (char),250,4.51079,4.52838
-Amharic (char),500,3.93997,3.99023
-Amharic (char),750,3.56231,3.62873
-Amharic (char),1000,3.34411,3.41626
-Amharic (char),1250,3.22177,3.30152
-Amharic (char),1500,3.14154,3.21912
-Amharic (char),1750,3.07412,3.16166
-Amharic (char),2000,3.02572,3.11878
-Amharic (char),2250,2.99671,3.08704
-Amharic (char),2500,2.97816,3.07250
-Amharic normalized (char),0,8.50664,8.50245
-Amharic normalized (char),250,4.51829,4.53283
-Amharic normalized (char),500,3.94900,3.99359
-Amharic normalized (char),750,3.51880,3.57959
-Amharic normalized (char),1000,3.31553,3.38295
-Amharic normalized (char),1250,3.21053,3.28653
-Amharic normalized (char),1500,3.12667,3.20233
-Amharic normalized (char),1750,3.06380,3.14690
-Amharic normalized (char),2000,3.01078,3.10001
-Amharic normalized (char),2250,2.98080,3.06922
-Amharic normalized (char),2500,2.96196,3.05487
+English (CPU demo),0,6.05432,6.04785
+English (CPU demo),250,3.30613,3.36376
+English (CPU demo),500,2.73812,2.94670
+English (CPU demo),750,2.46271,2.72083
+English (CPU demo),1000,2.33197,2.60698
+English (CPU demo),1250,2.24547,2.52401
+English (CPU demo),1500,2.18102,2.46098
+English (CPU demo),1750,2.13452,2.42174
+English (CPU demo),2000,2.09385,2.38289
+English (CPU demo),2250,2.07070,2.36380
+English (CPU demo),2500,2.05399,2.34842
+Amharic (CPU demo),0,8.60197,8.60168
+Amharic (CPU demo),250,4.51079,4.52838
+Amharic (CPU demo),500,3.93997,3.99023
+Amharic (CPU demo),750,3.56231,3.62873
+Amharic (CPU demo),1000,3.34411,3.41626
+Amharic (CPU demo),1250,3.22177,3.30152
+Amharic (CPU demo),1500,3.14154,3.21912
+Amharic (CPU demo),1750,3.07412,3.16166
+Amharic (CPU demo),2000,3.02572,3.11878
+Amharic (CPU demo),2250,2.99671,3.08704
+Amharic (CPU demo),2500,2.97816,3.07250

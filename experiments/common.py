@@ -35,6 +35,11 @@ def enter_repo_root() -> None:
     os.chdir(ROOT)
 
 
+def first_existing(*paths: str) -> str:
+    """The first path that exists (T4-trained checkpoints are preferred over the CPU demo ones), else the first."""
+    return next((p for p in paths if Path(p).exists()), paths[0])
+
+
 def default_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -79,7 +84,7 @@ def series(rows: list[dict], col: str) -> tuple[list[int], list[float]]:
 # ---------------------------------------------------------------------------------------
 # Training sweeps
 # ---------------------------------------------------------------------------------------
-def add_sweep_args(ap: argparse.ArgumentParser, default_base: str = "configs/exp_base.yaml") -> None:
+def add_sweep_args(ap: argparse.ArgumentParser, default_base: str = "configs/exp4_architecture.yaml") -> None:
     ap.add_argument("--base", default=default_base, help="base config YAML")
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VAL", help="override the base config (e.g. train.max_iters=200)")
     ap.add_argument("--out", default="results", help="where the .md/.png outputs go")

@@ -174,8 +174,8 @@ def test_split_markdown_images(tmp_path):
 def test_find_runs_and_curves(tmp_path):
     run = tmp_path / "checkpoints" / "r1"
     run.mkdir(parents=True)
-    (run / "log.csv").write_text("step,lr,train_loss,tokens_per_sec,eval_train_loss,eval_val_loss,elapsed_s,grad_norm\n"
-                                 "0,0.1,,,4.0,4.1,1,\n10,0.1,3.5,100,,,2,0.5\n20,0.1,,,3.0,3.2,3,\n")
+    (run / "log.csv").write_text("step,lr,train_loss,tokens_per_sec,eval_train_loss,eval_val_loss,elapsed_s\n"
+                                 "0,0.1,,,4.0,4.1,1\n10,0.1,3.5,100,,,2\n20,0.1,,,3.0,3.2,3\n")
     runs = lib.find_training_runs(tmp_path)
     assert list(runs) == ["checkpoints/r1"]
     c = lib.run_curves(runs["checkpoints/r1"])
@@ -233,35 +233,6 @@ def test_app_temperature_comparison_for_both_models(app):
     app.sidebar.radio[0].set_value("Amharic").run()
     next(b for b in app.button if b.key == "cmp_go").click().run()
     assert not app.exception, [e.value for e in app.exception]
-
-
-# ---------------- deployment folder ----------------
-def test_built_space_folder_is_self_contained(ckpt_dir, tmp_path, monkeypatch):
-    """The assembled Space must import and load a model with nothing from the repo (no training code paths needed)."""
-    import shutil
-    import subprocess
-    import sys
-
-    from scripts import build_space
-
-    monkeypatch.setattr(build_space, "COPY_DIRS", ["app/static", "assets/fonts"])       # skip big/unrelated folders in the test
-    monkeypatch.setattr(build_space, "COPY_GLOBS", [])
-    out = tmp_path / "space"
-    copied = build_space.build(out)
-    shutil.copytree(ckpt_dir, out / "app" / "checkpoints")                              # tiny exported models
-    assert "app/app.py" in copied and (out / "requirements.txt").read_text().startswith("--extra-index-url")
-    readme = (out / "README.md").read_text(encoding="utf-8")
-    assert readme.startswith("---") and "sdk: streamlit" in readme and "app_file: app/app.py" in readme
-    assert "lfs" in (out / ".gitattributes").read_text()
-    code = ("import sys; sys.path.insert(0, '.'); import app.lib as lib, src.model as sm; "
-            "m, t, i = lib.load_demo_model('app/checkpoints/amharic/model.pt'); "
-            "print(lib.ROOT); print(sm.__file__); print(''.join(lib.stream_text(m, t, 'ab', 3, method='greedy')) is not None, i['vocab_size'])")
-    import os
-    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    r = subprocess.run([sys.executable, "-c", code], cwd=out, capture_output=True, text=True, env=env)
-    assert r.returncode == 0, r.stderr[-800:]
-    lines = r.stdout.strip().splitlines()
-    assert Path(lines[-3]).resolve() == out.resolve() and Path(lines[-2]).resolve().is_relative_to(out.resolve())   # imports come from the built folder
 
 
 def test_app_runs_in_a_fresh_process_like_streamlit_does(ckpt_dir):

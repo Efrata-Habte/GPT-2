@@ -105,15 +105,12 @@ bits/char = loss per token x tokens/chars / ln 2, so models with different token
 
 | model | params | vocab | train bits/char | val bits/char | val bits/byte | val bits/word | steps |
 |---|---|---|---|---|---|---|---|
-| English (char) | 421,504 | 65 | 2.054 | 2.348 | 2.348 | 12.8 | 2500 |
-| Amharic (char) | 461,440 | 377 | 2.978 | 3.073 | 1.190 | 16.0 | 2500 |
-| Amharic normalized (char) | 457,728 | 348 | 2.962 | 3.055 | 1.184 | 15.9 | 2500 |
+| English (CPU demo) | 421,504 | 65 | 2.054 | 2.348 | 2.348 | 12.8 | 2500 |
+| Amharic (CPU demo) | 461,440 | 377 | 2.978 | 3.073 | 1.190 | 16.0 | 2500 |
 
-**Reading the three units.** Bits per *character* is what the assignment asks for, but characters are not equally informative: a Ge'ez letter is a consonant+vowel syllable (2.58 UTF-8 bytes on average here, against 1.00 for English), so it naturally costs more bits than a Latin letter. Bits per *byte* normalises for the encoding and bits per *word* for the amount of text; use the unit that matches the claim you want to make. The two Amharic rows differ only in normalization.
+**Reading the three units.** Bits per *character* is what the assignment asks for, but characters are not equally informative: a Ge'ez letter is a consonant+vowel syllable (2.58 UTF-8 bytes on average here, against 1.00 for English), so it naturally costs more bits than a Latin letter. Bits per *byte* normalises for the encoding and bits per *word* for the amount of text; use the unit that matches the claim you want to make.
 
 ![bpc](bpc_comparison.png)
-
-Caveat: the normalized model is scored on normalized text, which is easier by construction (fewer distinct spellings), so its bits/char are not a like-for-like comparison with the raw model; they show the size of the effect on the same corpus.
 
 ## Samples from the Amharic model
 

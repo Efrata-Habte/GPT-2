@@ -1,7 +1,7 @@
 # Findings: Amharic (Ge'ez script) tokenization study
 
 Numbers come from `tokenizer_analysis.md` / `tokenizer_stats.csv` (English and Amharic each cut to 1,000,000 characters;
-BPE trained on the first 90%, measured on the held-out 10%) and from three CPU demo models (same 0.42-0.46M-parameter
+BPE trained on the first 90%, measured on the held-out 10%) and from the CPU demo models (same 0.42-0.46M-parameter
 architecture, 2,500 steps, same seed). This note is hand-written from those numbers; regenerate the tables with
 `python experiments/exp11_amharic_study.py` (add `--reuse_analysis` to skip re-training the tokenizers).
 
@@ -55,9 +55,9 @@ architecture, 2,500 steps, same seed). This note is hand-written from those numb
 - Folding ሐ/ኀ→ሀ, ሠ→ሰ, ዐ→አ, ፀ→ጸ (all seven vowel orders) changes only **1.2% of characters**, but removes 28 distinct
   characters (351 → 323) and 678 word types (38,143 → 37,465, −1.8%). Unseen validation words fall from 16.6% to 16.2%.
 - Fertility moves by about 1-3% (char-BPE at 500: 3.67 → 3.57 tokens/word; at 1,000: 2.90 → 2.87).
-- Trained model: **3.073 → 3.055 val bits/char** (−0.6%). Caveat: the normalized model is scored on normalized text, which is easier by
-  construction, and with one seed per model I cannot tell whether a 0.6% difference is real. Read this as "small, not obviously useful for loss";
-  the bigger benefit is consistency (one spelling per word), and the cost is that the model can never produce the folded-away spellings.
+- The benefit is consistency (one spelling per word); the cost is that a model trained on normalized text can never produce the
+  folded-away spellings. Train one with `--set data.normalize=homophones` to measure the effect on loss (score it on normalized text,
+  which is easier by construction, so the comparison is not like-for-like).
 
 ## 6. English vs Amharic models: choose the unit carefully
 
@@ -65,7 +65,6 @@ architecture, 2,500 steps, same seed). This note is hand-written from those numb
 |---|---|---|---|
 | English, char-level | 2.348 | 2.348 | 12.8 |
 | Amharic, char-level | 3.073 | 1.190 | 16.0 |
-| Amharic normalized | 3.055 | 1.184 | 15.9 |
 
 - Per character, Amharic looks harder (a syllable carries more information than a Latin letter). Per byte it looks easier.
   Per word it is ~25% more expensive, consistent with the larger word inventory. None of these is "the" answer; the report should say which one it uses and why.
