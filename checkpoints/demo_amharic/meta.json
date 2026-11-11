@@ -1,0 +1,8 @@
+{
+  "tokenizer": "char",
+  "vocab_size": 377,
+  "train_tokens": 3375548,
+  "val_tokens": 375061,
+  "train_chars": 3375548,
+  "val_chars": 375061
+}

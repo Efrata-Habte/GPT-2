@@ -2,8 +2,20 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ipynb_checkpoints/
-checkpoints/
+logs/
+build/
+
+# training runs (repo-root checkpoints/ only): keep logs, curves and summaries in git, never the large .pt files
+/checkpoints/*/*
+!/checkpoints/*/log.csv
+!/checkpoints/*/summary.json
+!/checkpoints/*/loss_curve.png
+!/checkpoints/*/meta.json
+
+# model weights are ignored everywhere, except the slim exported demo models (a few MB each)
 *.pt
+!/app/checkpoints/*/model.pt
+
 # raw / prepared data (code in data/ and data/amharic/ IS tracked)
 data/input.txt
 data/*.bin
@@ -14,7 +26,3 @@ data/amharic/*_char/
 data/amharic/*_bpe*/
 data/amharic/*_cbpe*/
 results/runs/
-logs/
-# demo checkpoints are small and meant to be committed / uploaded to a Space
-!app/checkpoints/**/*.pt
-build/

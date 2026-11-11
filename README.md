@@ -88,6 +88,22 @@ streamlit run app/app.py
 Training writes, into `checkpoints/<run>/`: `log.csv` (loss, learning rate, tokens/sec, gradient norm), `loss_curve.png`, `ckpt_best.pt`, `ckpt_last.pt`,
 `summary.json` (params, best val loss, bits/char, time) and copies of the tokenizer. Checkpoints store model, optimizer, config, tokenizer, step and best val loss.
 
+## Training on a GPU (Colab) and committing the results
+
+The repository is the deliverable; Colab is only used as a free GPU. [`notebooks/train_on_colab.ipynb`](notebooks/train_on_colab.ipynb)
+([open in Colab](https://colab.research.google.com/github/Efrata-Habte/GPT-2/blob/main/notebooks/train_on_colab.ipynb)) clones this repo,
+trains `configs/small.yaml` and `configs/amharic.yaml` on a T4, optionally runs the experiments, exports slim models and downloads
+everything as one `trained_outputs.zip`. Unzip it into the repo and commit:
+
+```bash
+git add app/checkpoints results checkpoints/small checkpoints/amharic
+git commit -m "Add T4-trained models and results" && git push
+```
+
+What goes into git: the slim exported models (`app/checkpoints/*/model.pt`: weights + tokenizer, ~43 MB for `small`, under GitHub's 100 MB
+limit), each run's `log.csv`, `summary.json` and `loss_curve.png`, and everything in `results/`. Full training checkpoints (`ckpt_*.pt`, which also hold
+optimizer state) stay out of git; anyone can regenerate them with the commands above.
+
 ## Repository layout
 
 ```
