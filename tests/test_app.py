@@ -32,6 +32,7 @@ def ckpt_dir(tmp_path_factory):
     root = tmp / "exported"
     lib.export_checkpoint(_train_tiny(tmp, "en", EN, "char"), root / "english")
     lib.export_checkpoint(_train_tiny(tmp, "am", AM, "bpe_byte"), root / "amharic")
+    lib.export_checkpoint(_train_tiny(tmp, "enf", EN + EN.upper(), "char"), root / "english_full")   # bigger "full-data" English
     return root
 
 
@@ -201,7 +202,7 @@ def app(ckpt_dir, monkeypatch):
 def test_app_starts_and_has_all_tabs_and_selector(app):
     app.run()
     assert not app.exception, [e.value for e in app.exception]
-    assert len(app.tabs) == 8 and app.tabs[0].label.endswith("Generate")
+    assert len(app.tabs) == 9 and app.tabs[0].label.endswith("Generate")
     assert app.sidebar.radio[0].options == ["English", "Amharic"]
 
 
@@ -216,13 +217,13 @@ def test_app_generate_works_for_both_models(app):
 
 def test_app_next_token_inspector_click_appends_a_token(app):
     app.run()
-    before = list(app.session_state["inspect_ids_English"])
-    next(b for b in app.button if b.key == "pick_English_0").click().run()
+    before = list(app.session_state["inspect_ids_english"])
+    next(b for b in app.button if b.key == "pick_english_0").click().run()
     assert not app.exception, [e.value for e in app.exception]
-    after = list(app.session_state["inspect_ids_English"])
+    after = list(app.session_state["inspect_ids_english"])
     assert len(after) == len(before) + 1 and after[:-1] == before
-    next(b for b in app.button if b.key == "undo_English").click().run()
-    assert list(app.session_state["inspect_ids_English"]) == before
+    next(b for b in app.button if b.key == "undo_english").click().run()
+    assert list(app.session_state["inspect_ids_english"]) == before
 
 
 def test_app_temperature_comparison_for_both_models(app):
@@ -277,4 +278,17 @@ def test_app_runs_in_a_fresh_process_like_streamlit_does(ckpt_dir):
     env = {**os.environ, "GPT_DEMO_CKPT_DIR": str(ckpt_dir), "PYTHONUTF8": "1"}
     env.pop("PYTHONPATH", None)
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, env=env, timeout=600)
-    assert r.returncode == 0 and "TABS 8" in r.stdout, (r.stdout[-500:], r.stderr[-1500:])
+    assert r.returncode == 0 and "TABS 9" in r.stdout, (r.stdout[-500:], r.stderr[-1500:])
+
+
+def test_app_training_data_selector_and_comparison_tab(app):
+    app.run()
+    assert app.sidebar.radio[1].options == ["Small dataset", "Full dataset"]
+    app.sidebar.radio[1].set_value("Full dataset").run()                     # English full-data model exists
+    assert not app.exception, [e.value for e in app.exception]
+    assert len(app.session_state["inspect_ids_english_full"]) > 0          # state is kept per model
+    next(b for b in app.button if b.key == "data_go").click().run()          # side-by-side generation, both models
+    assert not app.exception, [e.value for e in app.exception]
+    app.sidebar.radio[0].set_value("Amharic").run()                          # no Amharic full-data model -> falls back
+    assert not app.exception, [e.value for e in app.exception]
+    assert any("showing the small-data model" in w.value for w in app.sidebar.warning)

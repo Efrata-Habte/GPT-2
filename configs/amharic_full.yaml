@@ -1,0 +1,37 @@
+# The Amharic model on the FULL Amharic data (Wikipedia + news). T4: ~30 min (estimate).
+# Build the corpus first: python -I data/amharic/prepare.py && python -I data/amharic/prepare_wikipedia.py
+model: the "small" architecture trained on the Amharic corpus.
+# Prepare the corpus first:  python -I data/amharic/prepare.py
+# Char-level tokenizer by default (about 380 characters); the vocabulary is ~6x the English one, so the
+# embedding table is slightly bigger. Try tokenizer: bpe_char / bpe_byte and normalize: homophones.
+# Sized for a ~30 min budget on a Colab T4 (check tokens_per_sec, adjust train.max_iters).
+model:
+  n_layer: 6
+  n_head: 6
+  n_embd: 384
+  block_size: 256
+  dropout: 0.2
+  pos_encoding: learned
+  norm_position: pre
+  tie_weights: true
+
+data:
+  path: data/amharic/amharic_full.txt
+  tokenizer: char           # char | bpe_char | bpe_byte
+  bpe_vocab_size: 1000      # used by the bpe_* tokenizers
+  normalize: none           # none | homophones | homophones+wordspace
+
+train:
+  batch_size: 64
+  max_iters: 3000
+  eval_interval: 250
+  eval_iters: 50
+  log_interval: 10
+  lr: 1.0e-3
+  min_lr: 1.0e-4
+  warmup_iters: 100
+  weight_decay: 0.1
+  grad_clip: 1.0
+  mixed_precision: true
+  seed: 1337
+  out_dir: checkpoints/amharic_full

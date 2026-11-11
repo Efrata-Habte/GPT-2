@@ -79,6 +79,21 @@ architecture, 2,500 steps, same seed). This note is hand-written from those numb
   It is not coherent text, as expected from a 0.46M-parameter model. T = 1.3 invents non-words and stray symbols.
 - See `samples.json` / `tokenizer_analysis.md` for the full samples, and the demo's Generate tab to try your own prompts.
 
+## 8. More data: Wikipedia + news vs news only (experiment 12)
+
+Same architecture, steps and seed; the full model's training text is 9.9M characters (Wikipedia + the same news) vs 3.4M.
+Both are scored on text neither saw (`results/data_scale/data_scale.md`):
+
+| test text | news-only model | Wikipedia + news model |
+|---|---|---|
+| held-out news | **3.072** bits/char | 3.252 (5.9% worse) |
+| held-out Wikipedia | 4.188 | **3.525** (15.9% better) |
+
+- The news-only model is badly out of domain on encyclopedic text (4.19 vs 3.07 bits/char on news): the topic and register shift matters
+  more than the script.
+- The mixed model generalises much better, but with a fixed budget of 2,500 steps it saw about a third as much news, so it is worse on news.
+  More data helps most when the model also gets enough capacity and steps to use it; that is what the T4 runs can show.
+
 ## Limitations
 
 - One seed per model and small CPU models: differences in the second decimal of bits/char are not reliable.

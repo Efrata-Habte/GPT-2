@@ -181,3 +181,21 @@ def test_evaluate_tokenizer_and_fragment_share():
     assert rb["tokens"] > rc["tokens"]                       # byte level is longer for Ge'ez
     assert rb["bytes_per_token"] == pytest.approx(len(text.encode()) / rb["tokens"])
     assert rc["tokens_per_char"] < 1.0 and rc["types_for_95"] <= rc["types_for_99"]
+
+
+# ---------------- exp12 (small vs full data) ----------------
+def test_test_bits_per_char_matches_model_loss_and_untrained_baseline():
+    from experiments.exp12_data_scale import shared_text, test_bits_per_char
+    from src.tokenizer import CharTokenizer
+    text = "abcdefgh " * 300
+    tok = CharTokenizer.from_text(text)
+    torch.manual_seed(0)
+    m = GPT(GPTConfig(vocab_size=tok.vocab_size, block_size=16, n_layer=1, n_head=2, n_embd=16, dropout=0.0)).eval()
+    r = test_bits_per_char(m, tok, text)
+    assert r["bits_per_char"] == pytest.approx(math.log2(tok.vocab_size), abs=0.1)        # untrained ~ uniform
+    ids = torch.tensor([tok.encode(text[:17])])                                            # one exact window
+    loss = m(ids[:, :-1], ids[:, 1:])[1].item()
+    assert test_bits_per_char(m, tok, text[:17])["nats_per_token"] == pytest.approx(loss, abs=1e-5)
+    other = CharTokenizer.from_text("abc ")
+    kept, dropped = shared_text("abcxyz", [tok, other])
+    assert kept == "abc" and dropped == pytest.approx(0.5)

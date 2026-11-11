@@ -102,7 +102,8 @@ def train(cfg: dict, resume: str | None = None) -> dict:
     if not (data_dir / "train.bin").exists():
         print(f"preparing dataset {data_dir} from {dc['path']} ...")
         prepare_dataset(Path(dc["path"]).read_text(encoding="utf-8"), data_dir, dc["tokenizer"],
-                        dc.get("bpe_vocab_size", 512), normalize=dc.get("normalize"))
+                        dc.get("bpe_vocab_size", 512), normalize=dc.get("normalize"),
+                        bpe_train_chars=dc.get("bpe_train_chars"))
     meta, data = load_meta(data_dir), load_data(data_dir)
 
     # ---- model ----

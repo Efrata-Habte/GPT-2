@@ -62,6 +62,9 @@ Run all commands from the repository root.
 # 1. data: downloads Tiny Shakespeare and writes data/input.txt (train/val .bin files are built automatically on first training run)
 python data/prepare.py                                         # char-level;  --tokenizer bpe_char|bpe_byte --bpe_vocab_size 1000 for BPE
 python data/prepare.py --input my_corpus.txt                   # any other text corpus
+python -I data/prepare_full_shakespeare.py                     # 'full' English data: Complete Works of Shakespeare (+ shared test set)
+python -I data/amharic/prepare.py                              # Amharic news corpus (small Amharic data)
+python -I data/amharic/prepare_wikipedia.py                    # 'full' Amharic data: Wikipedia + news (+ shared test sets)
 
 # 2. train
 python -m src.train --config configs/tiny.yaml                 # CPU smoke run (~1 min)
@@ -198,6 +201,28 @@ Amharic demo model, prompt `ሰላም ` (hello / peace)
 
 Expected for 0.4M-parameter models: right format and vocabulary, no real coherence. More samples at several temperatures: `results/exp1_temperature.md` (English) and `results/amharic/tokenizer_analysis.md` (Amharic).
 
+### Small vs full training data (experiment 12)
+
+Same architecture (2 layers, C=128), same 2,500 steps and seed; only the training text differs. Both models of a pair are scored on the **same held-out text that neither saw** (`data/test_sets/`); each model's own validation loss is on different text and is not comparable.
+
+| language | model | training characters | test text | test bits/char | valid words (T=0.8) |
+|---|---|---|---|---|---|
+| English | small data: Tiny Shakespeare | 1.0M | unseen Shakespeare | 2.469 | 92% |
+| English | full data: Complete Works | 4.3M | unseen Shakespeare | 2.253 | 91% |
+| Amharic | small data: news | 3.4M | news (held out) | 3.072 | 88% |
+| Amharic | small data: news | 3.4M | Wikipedia (held out) | 4.188 | 88% |
+| Amharic | full data: Wikipedia + news | 9.9M | news (held out) | 3.252 | 83% |
+| Amharic | full data: Wikipedia + news | 9.9M | Wikipedia (held out) | 3.525 | 83% |
+
+- **English:** unseen Shakespeare 2.469 → 2.253 bits/char (8.7% better).
+- **Amharic:** held-out Wikipedia 4.188 → 3.525 (15.9% better); held-out news 3.072 → 3.252 (5.9% worse).
+
+**Reading it:** more data clearly helps English (8.7% better on unseen Shakespeare) and helps Amharic a lot on Wikipedia text (15.9% better), but the full Amharic model is *worse* on news (5.9% worse). With the same 2,500 steps, it spent about two thirds of them on Wikipedia and saw about a third as much news as the news-only model: at a fixed, small training budget, a broader mixture trades in-domain skill for generality. The valid-word rate (4 samples per model) barely moves and is too noisy to rank these models. With the T4 models (25x larger, more steps) the full-data advantage should grow; `notebooks/train_on_colab.ipynb` trains all four.
+
+Full table, samples and caveats: [`results/data_scale/data_scale.md`](results/data_scale/data_scale.md). In the demo: sidebar **Training data**, and the **Small vs full data** tab for side-by-side generation.
+
+![data scale](results/data_scale/data_scale.png)
+
 ### Experiments
 
 | # | experiment | status in this repo | where |
@@ -212,6 +237,7 @@ Expected for 0.4M-parameter models: right format and vocabulary, no real coheren
 | 8 | scaling plot | implemented; run on a T4 | `results/exp8_scaling.md` |
 | 9 | attention heatmaps + head labels | done (CPU demo model): L0H0 is a previous-token head (0.97 of its attention on token i-1), L1H2 a punctuation head (0.54 vs 0.10 for uniform) | `results/exp9_attention.md` |
 | 10-11 | Amharic study | done (see below) | `results/amharic/` |
+| 12 | small vs full training data | done with CPU demo models (see above) | `results/data_scale/` |
 
 ## Amharic (Ge'ez script) study
 
@@ -295,6 +321,7 @@ imports and loads a model on its own. Set `GPT_DEMO_CKPT_DIR` to point the app a
 | `results/exp8_scaling.*` | `python experiments/exp8_scaling.py --extra_runs results/runs/exp4_n_layer results/runs/exp4_n_embd` |
 | `results/exp9_attention*.png` | `python experiments/exp9_attention.py --ckpt <ckpt>` |
 | `results/amharic/*` | `python experiments/exp10_amharic.py` and `python experiments/exp11_amharic_study.py` |
+| `results/data_scale/*` | `python experiments/exp12_data_scale.py` (after training `configs/demo_*_full.yaml`, or pass the T4 checkpoints) |
 | `results/SUMMARY.md` | `python experiments/make_summary.py` |
 | `notebooks/demo.ipynb` (with outputs) | `python notebooks/build_demo_notebook.py --execute` |
 
@@ -304,7 +331,7 @@ imports and loads a model on its own. Set `GPT_DEMO_CKPT_DIR` to point the app a
 
 ## Tests
 
-`python -m pytest -q` (142 tests, about 10 minutes on a laptop CPU):
+`python -m pytest -q` (145 tests, a few minutes on a laptop CPU):
 
 | file | proves |
 |---|---|
@@ -330,4 +357,5 @@ imports and loads a model on its own. Set `GPT_DEMO_CKPT_DIR` to point the app a
 ## Data, fonts and licences
 
 - Tiny Shakespeare (Karpathy's char-rnn repository). Amharic: MasakhaNEWS (Adelani et al.), https://github.com/masakhane-io/masakhane-news; I believe it is CC BY-NC 4.0, so check before redistributing. `data/` text and `.bin` files are git-ignored.
+- Complete Works of Shakespeare: Project Gutenberg eBook #100 (public domain), reformatted by `data/prepare_full_shakespeare.py`. Amharic Wikipedia: Wikimedia dump, CC BY-SA 4.0 (cleaned by `data/amharic/prepare_wikipedia.py`; credit Wikipedia contributors if you redistribute the text).
 - Noto Sans Ethiopic (SIL Open Font License 1.1), bundled in `assets/fonts/` and `app/static/` so Ge'ez renders in plots and in the demo.

@@ -1,0 +1,12 @@
+{
+  "params": 421376,
+  "best_val_loss": 1.638911485671997,
+  "final_val_loss": 1.638911485671997,
+  "final_train_loss": 1.5306830406188965,
+  "val_bits_per_char": 2.3644494728349534,
+  "train_seconds": 2599.744538784027,
+  "mean_tokens_per_sec": 4583.548864423151,
+  "steps": 2500,
+  "vocab_size": 64,
+  "device": "cpu"
+}

@@ -99,13 +99,20 @@ def plot_attention(matrix, labels: list[str], title: str):
 # ----------------------------------------------------------------------------------------------
 st.sidebar.title("GPT from scratch")
 choice = st.sidebar.radio("Model", list(lib.MODELS), help="Each language has its own checkpoint and tokenizer.")
-bundle = get_model(lib.MODELS[choice])
+data_choice = st.sidebar.radio("Training data", list(lib.DATA_VARIANTS),
+                               help="Same architecture and training steps; the full-data model was trained on ~3-4x more text.")
+mkey = lib.MODELS[choice] + lib.DATA_VARIANTS[data_choice]          # e.g. english, english_full
+bundle = get_model(mkey)
+if bundle is None and mkey != lib.MODELS[choice]:
+    st.sidebar.warning(f"No full-data {choice} model yet (train `configs/demo_{mkey}.yaml`); showing the small-data model.")
+    mkey = lib.MODELS[choice]
+    bundle = get_model(mkey)
 if bundle is None:
     st.sidebar.error(f"No checkpoint found for the {choice} model.")
     st.error(
         f"No **{choice}** checkpoint found. Train one (`python -m src.train --config configs/demo_"
-        f"{lib.MODELS[choice]}.yaml`) and export it with `python scripts/export_for_demo.py`, "
-        "or put `model.pt` in `app/checkpoints/" + lib.MODELS[choice] + "/`."
+        f"{mkey}.yaml`) and export it with `python scripts/export_for_demo.py`, "
+        "or put `model.pt` in `app/checkpoints/" + mkey + "/`."
     )
     st.stop()
 model, tok, info = bundle
@@ -117,11 +124,12 @@ st.sidebar.markdown(
     f"**{info['params']:,}** parameters  \n{mc['n_layer']} layers · {mc['n_head']} heads · C={mc['n_embd']}  \n"
     f"context {mc['block_size']} tokens  \nvocab {info['vocab_size']} ({tok_kind})  \n"
     f"trained {info['step'] or '?'} steps" + (f", best val loss {info['best_val_loss']:.3f}" if info.get("best_val_loss") else "")
+    + f"  \ndata: {lib.DATA_DESCRIPTIONS.get(mkey, mkey)}" + (f" ({info['train_chars'] / 1e6:.1f}M characters)" if info.get("train_chars") else "")
 )
 st.sidebar.caption("Demo checkpoints are small CPU-trained models, so expect rough text; see the About tab.")
 
 st.title("🧠 A GPT-2-style language model, built from scratch")
-tabs = st.tabs(["✍️ Generate", "🔍 Next-token inspector", "🌡️ Temperature comparison", "👁️ Attention explorer",
+tabs = st.tabs(["✍️ Generate", "🔍 Next-token inspector", "🌡️ Temperature comparison", "📚 Small vs full data", "👁️ Attention explorer",
                 "🔤 Tokenizer playground", "🇪🇹 Amharic study", "📈 Training & experiments", "ℹ️ About"])
 
 # ----------------------------------------------------------------------------------------------
@@ -129,7 +137,7 @@ tabs = st.tabs(["✍️ Generate", "🔍 Next-token inspector", "🌡️ Tempera
 # ----------------------------------------------------------------------------------------------
 with tabs[0]:
     st.subheader("Generate text")
-    prompt = st.text_area("Prompt", DEFAULT_PROMPT[choice], height=90, key=f"gen_prompt_{choice}")
+    prompt = st.text_area("Prompt", DEFAULT_PROMPT[choice], height=90, key=f"gen_prompt_{mkey}")
     c1, c2 = st.columns(2)
     method = c1.radio("Decoding method", ["greedy", "temperature", "top-k", "top-p"], index=1, horizontal=True, key="gen_method")
     temperature = c1.slider("Temperature", 0.1, 2.0, 0.8, 0.05, disabled=method == "greedy", key="gen_temp")
@@ -158,7 +166,7 @@ with tabs[0]:
 with tabs[1]:
     st.subheader("Next-token inspector")
     st.caption("The model outputs a probability for every token in its vocabulary. Click a token to append it and step forward manually.")
-    ids_key, txt_key = f"inspect_ids_{choice}", f"inspect_txt_{choice}"
+    ids_key, txt_key = f"inspect_ids_{mkey}", f"inspect_txt_{mkey}"
     if ids_key not in st.session_state:
         st.session_state[ids_key] = lib.encode_prompt_safe(tok, DEFAULT_PROMPT[choice])[0]
         st.session_state[txt_key] = tok.decode(st.session_state[ids_key])
@@ -198,10 +206,10 @@ with tabs[1]:
         st.markdown("**Click a token to append it:**")
         cols = st.columns(2)
         for rank, t in enumerate(top):
-            cols[rank % 2].button(f"{t['label']}  ·  {t['prob']:.1%}", key=f"pick_{choice}_{rank}", on_click=_append, args=(t["id"],), width="stretch")
+            cols[rank % 2].button(f"{t['label']}  ·  {t['prob']:.1%}", key=f"pick_{mkey}_{rank}", on_click=_append, args=(t["id"],), width="stretch")
         b1, b2 = st.columns(2)
-        b1.button("↩ Undo last token", on_click=_undo, key=f"undo_{choice}", width="stretch")
-        b2.button("⟲ Reset", on_click=_reset, key=f"reset_{choice}", width="stretch")
+        b1.button("↩ Undo last token", on_click=_undo, key=f"undo_{mkey}", width="stretch")
+        b2.button("⟲ Reset", on_click=_reset, key=f"reset_{mkey}", width="stretch")
     st.markdown("**Current tokens:**")
     st.markdown(lib.tokens_to_html([lib.token_labels(tok, [i], visible=False)[0] for i in ids[-60:]]), unsafe_allow_html=True)
     st.caption(f"{len(ids)} tokens in context" + (f" (the model only looks at the last {mc['block_size']})" if len(ids) > mc["block_size"] else ""))
@@ -212,7 +220,7 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("Same prompt, different temperatures")
     st.caption("Same seed everywhere, so the only difference is temperature. Low = safe and repetitive, high = diverse and error-prone.")
-    t_prompt = st.text_area("Prompt", DEFAULT_PROMPT[choice], height=70, key=f"cmp_prompt_{choice}")
+    t_prompt = st.text_area("Prompt", DEFAULT_PROMPT[choice], height=70, key=f"cmp_prompt_{mkey}")
     temps = st.multiselect("Temperatures", [0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0], default=[0.2, 0.5, 0.8, 1.0, 1.5], key="cmp_temps")
     d1, d2, d3 = st.columns(3)
     t_max = d1.slider("Max new tokens", 20, 400, 150, 10, key="cmp_max")
@@ -234,10 +242,10 @@ with tabs[2]:
 # ----------------------------------------------------------------------------------------------
 # 4. Attention explorer
 # ----------------------------------------------------------------------------------------------
-with tabs[3]:
+with tabs[4]:
     st.subheader("Attention explorer")
     st.caption("Row = the token doing the looking, column = the token it looks at. Each row sums to 1; the upper triangle is zero (causal mask).")
-    sentence = st.text_input("Sentence", DEFAULT_SENTENCE[choice], key=f"att_text_{choice}")
+    sentence = st.text_input("Sentence", DEFAULT_SENTENCE[choice], key=f"att_text_{mkey}")
     labels, attn, dropped = lib.attention_for_text(model, tok, sentence)
     if dropped:
         st.warning(f"Skipped characters this tokenizer has never seen: {' '.join(dropped)}")
@@ -262,7 +270,7 @@ with tabs[3]:
 # ----------------------------------------------------------------------------------------------
 # 5. Tokenizer playground
 # ----------------------------------------------------------------------------------------------
-with tabs[4]:
+with tabs[5]:
     st.subheader("Tokenizer playground")
     p1, p2, p3 = st.columns([2, 2, 3])
     tok_set = p1.radio("Tokenizers trained on", ["English", "Amharic"], index=0 if choice == "English" else 1, horizontal=True, key="pg_set")
@@ -309,7 +317,7 @@ with tabs[4]:
 # ----------------------------------------------------------------------------------------------
 # 6. Amharic study
 # ----------------------------------------------------------------------------------------------
-with tabs[5]:
+with tabs[6]:
     st.subheader("Amharic (Ge'ez script) study")
     rows = lib.read_csv_rows(AM_RESULTS / "tokenizer_stats.csv")
     if not rows:
@@ -384,7 +392,7 @@ with tabs[5]:
 # ----------------------------------------------------------------------------------------------
 # 7. Training & experiments
 # ----------------------------------------------------------------------------------------------
-with tabs[6]:
+with tabs[7]:
     st.subheader("Training runs")
     runs = lib.find_training_runs()
     if runs:
@@ -419,11 +427,11 @@ with tabs[6]:
 # ----------------------------------------------------------------------------------------------
 # 8. About
 # ----------------------------------------------------------------------------------------------
-with tabs[7]:
+with tabs[8]:
     st.subheader("About this model")
     a1, a2 = st.columns([2, 3])
     with a1:
-        st.markdown(f"**{choice} model**")
+        st.markdown(f"**{choice} model, {data_choice.lower()}**")
         st.json({**mc, "tokenizer": tok_kind, "parameters": info["params"], "trained_steps": info["step"], "checkpoint": Path(info["path"]).name})
         st.markdown("**Parameter breakdown**")
         st.dataframe(pd.DataFrame(lib.param_breakdown_rows(model), columns=["component", "parameters"]), hide_index=True, width="stretch")
@@ -443,3 +451,61 @@ with tabs[7]:
         Colab T4; export it with `python scripts/export_for_demo.py` and the demo will load it.
         """
     )
+
+
+# ----------------------------------------------------------------------------------------------
+# 4. Small vs full data
+# ----------------------------------------------------------------------------------------------
+with tabs[3]:
+    st.subheader("Does more training data help?")
+    st.caption("Two models with the same architecture, the same number of training steps and the same seed. The only difference is "
+               "how much text they were trained on.")
+    base = lib.MODELS[choice]
+    small_b, full_b = get_model(base), get_model(base + "_full")
+    if small_b is None or full_b is None:
+        st.info(f"Both {choice} models are needed: train `configs/demo_{base}.yaml` and `configs/demo_{base}_full.yaml`, "
+                "then run `python scripts/export_for_demo.py`.")
+    else:
+        variants = [("Small dataset", base, small_b), ("Full dataset", base + "_full", full_b)]
+        cols = st.columns(2)
+        for col, (label, key, (m, t, inf)) in zip(cols, variants):
+            col.markdown(f"**{label}:** {lib.DATA_DESCRIPTIONS.get(key, key)}")
+            col.caption(f"{inf['train_chars'] / 1e6:.1f}M training characters · {inf['params']:,} parameters · {inf['step']} steps"
+                        if inf.get("train_chars") else f"{inf['params']:,} parameters · {inf['step']} steps")
+
+        scores = ROOT / "results" / "data_scale" / "data_scale.json"
+        if scores.exists():
+            res = json.loads(scores.read_text(encoding="utf-8")).get(choice)
+            if res:
+                st.markdown("**Scored on the same unseen text** (bits per character, lower is better):")
+                rows = []
+                for name, d in res["models"].items():
+                    for tn, r in d["tests"].items():
+                        rows.append({"model": name, "test text": tn, "bits per character": round(r["bits_per_char"], 3)})
+                df = pd.DataFrame(rows)
+                chart = alt.Chart(df).mark_bar().encode(
+                    x=alt.X("test text:N", title=None), xOffset="model:N", y=alt.Y("bits per character:Q"),
+                    color=alt.Color("model:N", legend=alt.Legend(orient="bottom")), tooltip=["model", "test text", "bits per character"])
+                st.altair_chart(altair_font(chart.properties(height=280)), width="stretch")
+                names = list(res["models"])
+                msgs = []
+                for tn in res["tests"]:
+                    a_, b_ = res["models"][names[0]]["tests"][tn]["bits_per_char"], res["models"][names[-1]]["tests"][tn]["bits_per_char"]
+                    msgs.append(f"{tn}: {a_:.3f} → {b_:.3f} ({abs(100 * (a_ - b_) / a_):.1f}% {'better' if b_ < a_ else 'worse'})")
+                st.caption(" · ".join(msgs) + ". Each model's own validation loss is on different text, so only this shared test is a fair comparison.")
+                st.caption("Valid-word rate at T=0.8: " + ", ".join(f"{n}: {100 * d['valid_words']:.0f}%" for n, d in res["models"].items()))
+        else:
+            st.info("Run `python experiments/exp12_data_scale.py` to score both models on the shared held-out test text.")
+
+        st.markdown("**Same prompt, same seed, both models:**")
+        d_prompt = st.text_area("Prompt", DEFAULT_PROMPT[choice], height=70, key=f"data_prompt_{base}")
+        e1, e2, e3 = st.columns(3)
+        d_temp = e1.slider("Temperature", 0.1, 1.5, 0.8, 0.05, key="data_temp")
+        d_max = e2.slider("Max new tokens", 20, 500, 250, 10, key="data_max")
+        d_seed = e3.number_input("Seed", value=1337, step=1, key="data_seed")
+        if st.button("Generate with both models", type="primary", key="data_go"):
+            cols = st.columns(2)
+            for col, (label, key, (m, t, inf)) in zip(cols, variants):
+                with col:
+                    st.markdown(f"**{label}**")
+                    show_text(d_prompt + lib.generate_text(m, t, d_prompt, d_max, int(d_seed), temperature=d_temp))

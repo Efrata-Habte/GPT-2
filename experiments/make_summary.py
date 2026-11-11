@@ -30,6 +30,7 @@ ITEMS = [
     ("9", "Attention heatmaps", "python experiments/exp9_attention.py", ["exp9_attention.md", "exp9_attention_overview.png", "exp9_attention_selected.png"]),
     ("10", "Ge'ez vs English byte-BPE fragments", "python experiments/exp10_amharic.py", ["amharic/exp10_amharic.md", "amharic/exp10_amharic.png"]),
     ("11", "Amharic study (Phase 9)", "python experiments/exp11_amharic_study.py", ["amharic/tokenizer_analysis.md", "amharic/tokenizer_stats.csv", "amharic/fertility_vs_vocab.png"]),
+    ("12", "Small vs full training data (English + Amharic)", "python experiments/exp12_data_scale.py", ["data_scale/data_scale.md", "data_scale/data_scale.png", "data_scale/data_scale.json"]),
 ]
 
 

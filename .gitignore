@@ -21,6 +21,11 @@ data/input.txt
 data/*.bin
 data/input_*/
 data/amharic_download/
+data/shakespeare_download/
+data/amharic_wiki_download/
+data/shakespeare_full.txt
+data/shakespeare_full_*/
+data/test_sets/
 data/amharic/*.txt
 data/amharic/*_char/
 data/amharic/*_bpe*/

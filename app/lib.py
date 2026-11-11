@@ -26,6 +26,13 @@ from src.model import GPT  # noqa: E402
 from src.tokenizer import BPETokenizer, CharTokenizer, load_tokenizer, token_labels  # noqa: E402
 
 MODELS = {"English": "english", "Amharic": "amharic"}      # sidebar label -> checkpoint key
+DATA_VARIANTS = {"Small dataset": "", "Full dataset": "_full"}   # appended to the checkpoint key: english / english_full
+DATA_DESCRIPTIONS = {
+    "english": "Tiny Shakespeare (excerpts from the plays)",
+    "english_full": "Complete Works of Shakespeare",
+    "amharic": "MasakhaNEWS Amharic news",
+    "amharic_full": "Amharic Wikipedia + MasakhaNEWS",
+}
 TOKENIZER_NAMES = ["char", "bpe_char", "bpe_byte"]
 TOKENIZER_TITLES = {"char": "Character-level", "bpe_char": "Character-level BPE", "bpe_byte": "Byte-level BPE"}
 ETHIOPIC_CSS_FONTS = "'Noto Sans Ethiopic','Nyala','Ebrima','Abyssinica SIL'"
@@ -34,20 +41,18 @@ ETHIOPIC_CSS_FONTS = "'Noto Sans Ethiopic','Nyala','Ebrima','Abyssinica SIL'"
 # ----------------------------------------------------------------------------------------------
 # Locating and loading checkpoints
 # ----------------------------------------------------------------------------------------------
-def checkpoint_dirs() -> list[Path]:
-    """Where to look for a model called `key`, in order. GPT_DEMO_CKPT_DIR overrides (used by tests / Spaces)."""
-    dirs = []
-    if os.environ.get("GPT_DEMO_CKPT_DIR"):
-        dirs.append(Path(os.environ["GPT_DEMO_CKPT_DIR"]))
-    dirs += [ROOT / "app" / "checkpoints"]
-    return dirs
-
-
 def find_checkpoint(key: str) -> Path | None:
-    """app/checkpoints/<key>/model.pt (exported, weights only), else training output checkpoints/demo_<key>|<key>."""
-    for d in checkpoint_dirs():
-        if (d / key / "model.pt").exists():
-            return d / key / "model.pt"
+    """Where the model called `key` (english, english_full, amharic, amharic_full) is loaded from.
+
+    If GPT_DEMO_CKPT_DIR is set, ONLY <that dir>/<key>/model.pt is used (deployments, tests). Otherwise:
+    app/checkpoints/<key>/model.pt (exported, weights only), then the training output checkpoints/demo_<key>|<key>.
+    """
+    override = os.environ.get("GPT_DEMO_CKPT_DIR")
+    if override:
+        p = Path(override) / key / "model.pt"
+        return p if p.exists() else None
+    if (ROOT / "app" / "checkpoints" / key / "model.pt").exists():
+        return ROOT / "app" / "checkpoints" / key / "model.pt"
     for name in (f"demo_{key}", key):
         p = ROOT / "checkpoints" / name / "ckpt_best.pt"
         if p.exists():
@@ -64,17 +69,26 @@ def load_demo_model(path: str | Path):
         "best_val_loss": ck.get("best_val_loss"), "tokenizer_type": getattr(tok, "level", "char") if not isinstance(tok, CharTokenizer) else "char",
         "vocab_size": tok.vocab_size, "meta": ck.get("meta") or {}, "data": (ck.get("config") or {}).get("data") or ck.get("data") or {},
     }
+    data_meta = info["meta"].get("meta")
+    if data_meta is None and (Path(path).parent / "meta.json").exists():       # un-exported training checkpoint
+        data_meta = json.loads((Path(path).parent / "meta.json").read_text(encoding="utf-8"))
+    info["train_chars"] = (data_meta or {}).get("train_chars")
     return model, tok, info
 
 
 def export_checkpoint(src_ckpt: str | Path, out_dir: str | Path, meta: dict | None = None) -> Path:
     """Slim a training checkpoint for deployment: weights + architecture + tokenizer, no optimizer state."""
     ck = torch.load(src_ckpt, map_location="cpu", weights_only=False)
+    src_dir = Path(src_ckpt).parent
+    meta = dict(meta or {})
+    for name in ("meta.json", "summary.json"):           # training-data size and final metrics travel with the model
+        if (src_dir / name).exists():
+            meta[name.split(".")[0]] = json.loads((src_dir / name).read_text(encoding="utf-8"))
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     payload = {
         "model": ck["model"], "model_config": ck["model_config"], "tokenizer": ck["tokenizer"], "step": ck["step"],
-        "best_val_loss": ck["best_val_loss"], "data": ck["config"]["data"], "meta": meta or {},
+        "best_val_loss": ck["best_val_loss"], "data": ck["config"]["data"], "meta": meta,
     }
     torch.save(payload, out / "model.pt")
     return out / "model.pt"

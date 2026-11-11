@@ -1,0 +1,31 @@
+# The assignment-sized model on the FULL English data (Complete Works of Shakespeare). T4: ~30 min (estimate).
+# Build the corpus first: python -I data/prepare_full_shakespeare.py
+model:
+  n_layer: 6
+  n_head: 6
+  n_embd: 384
+  block_size: 256
+  dropout: 0.2
+  pos_encoding: learned     # learned | sinusoidal
+  norm_position: pre        # pre (GPT-2) | post (Vaswani)
+  tie_weights: true
+
+data:
+  path: data/shakespeare_full.txt
+  tokenizer: char           # char | bpe
+  bpe_vocab_size: 512
+
+train:
+  batch_size: 64
+  max_iters: 3000
+  eval_interval: 250
+  eval_iters: 50
+  log_interval: 10
+  lr: 1.0e-3
+  min_lr: 1.0e-4
+  warmup_iters: 100
+  weight_decay: 0.1
+  grad_clip: 1.0
+  mixed_precision: true     # fp16 autocast + GradScaler (CUDA only)
+  seed: 1337
+  out_dir: checkpoints/small_full

@@ -59,7 +59,7 @@ COPY_FILES = [
     "data/__init__.py", "data/amharic/__init__.py", "data/amharic/normalize.py",
     "report/architecture.png", ".streamlit/config.toml",
 ]
-COPY_DIRS = ["app/static", "app/checkpoints", "assets/tokenizers", "assets/fonts", "results/amharic"]
+COPY_DIRS = ["app/static", "app/checkpoints", "assets/tokenizers", "assets/fonts", "results/amharic", "results/data_scale"]
 COPY_GLOBS = [("results", "*.md"), ("results", "*.png")]
 
 

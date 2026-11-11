@@ -1,0 +1,105 @@
+{
+ "English": {
+  "models": {
+   "small data: Tiny Shakespeare": {
+    "checkpoint": "checkpoints\\demo_english\\ckpt_best.pt",
+    "train_chars": 1003854,
+    "params": 421504,
+    "vocab": 65,
+    "tests": {
+     "unseen Shakespeare": {
+      "bits_per_char": 2.469110379806822,
+      "nats_per_token": 1.711463744109371,
+      "tokens": 250000,
+      "chars": 250000,
+      "dropped_share": 0.0
+     }
+    },
+    "valid_words": 0.9158834483474934,
+    "distinct_2": 0.9937104430379747,
+    "sample": "ROMEO:\nClarence been the for your busing more at thou slook shalt\nShe good from what all deters not pleased me:\nI'll came of thy king what shall against come, I be my that\nTo have long to with all that his land moness--\n\nISABELLA:\nHe king me, then is you have the best royal is curror?\n\nSecond Mercutio, and here can:\nThou she'st to none, the shall aimely do a delive-hath\nTo take your courself soul part re"
+   },
+   "full data: Complete Works": {
+    "checkpoint": "checkpoints\\demo_english_full\\ckpt_best.pt",
+    "train_chars": 4347162,
+    "params": 421376,
+    "vocab": 64,
+    "tests": {
+     "unseen Shakespeare": {
+      "bits_per_char": 2.2531716534673114,
+      "nats_per_token": 1.5617858260617612,
+      "tokens": 250000,
+      "chars": 250000,
+      "dropped_share": 0.0
+     }
+    },
+    "valid_words": 0.9114797545034274,
+    "distinct_2": 0.9820178848680496,
+    "sample": "ROMEO:\nAy, thou art I would will thy chose world\nFor in the grose out you find that my father come. I will your feety contends,\nHe most the speak men, and them with my grave to me, shall at your lord.\n\nCLOWN:\nI this by you honester to withing; or honour are to gods,\nStruly soundle what the face this me, dreason,\nI will as them fall of him\nMine crown thou art your that or to most me stand.\n\nEDGAR:\nO, I th"
+   }
+  },
+  "tests": [
+   "unseen Shakespeare"
+  ],
+  "prompt": "ROMEO:\n"
+ },
+ "Amharic": {
+  "models": {
+   "small data: news": {
+    "checkpoint": "checkpoints\\demo_amharic\\ckpt_best.pt",
+    "train_chars": 3375548,
+    "params": 461440,
+    "vocab": 377,
+    "tests": {
+     "news (held out)": {
+      "bits_per_char": 3.0720146505984656,
+      "nats_per_token": 2.1293668111684165,
+      "tokens": 250000,
+      "chars": 250000,
+      "dropped_share": 0.0
+     },
+     "Wikipedia (held out)": {
+      "bits_per_char": 4.188388558228368,
+      "nats_per_token": 2.9031813736447623,
+      "tokens": 249127,
+      "chars": 249127,
+      "dropped_share": 0.0034920000000000506
+     }
+    },
+    "valid_words": 0.8815652768284347,
+    "distinct_2": 0.9966666666666667,
+    "sample": "የኢትዮጵያ ሚንስትሩ ገቢ አሲተያየቱም የተባሉት እንደሚሆን ከፍተኛ ነው። የቀድሞው ስምምነት ቡድኑ መመተው የነሐሴ ጨዋታ ለህዝብ የመጨረሻ አጣጣሪ ማዕከላት በአዋቂ ደግሞ ባለፈው ዓመት ላይ ሲሆን በማጠናቀቅ አዳዲስ አደጋ ወደዚህ ውይይት ብቻ ተከትሎ መካከል ነው። አፍሪካ ፕሬዝዳንት ይህ የሆነው በምርጫ ተመልክቷል። መሞታቸውን ጠቅላይ ሚኒስትር የሚያስፈልገው ዶ/ር እና ዲሞክራሲያ ሁኔታ አትሌቶች በበኩላቸውን እንዲሁም መቃወም በቤተሰቦቻቸው አሊያም ተደርጓል። ከሰላም ጋር በአሜሪካ አገሪቱን የሚያስወጣው ክትባት እንዲዘገባ ከአስርት የዋጋ ሁኔታ ያደረጉ ወደ 15 ብር ለኢትዮጵያ ለቢቢሲ ከፍተኛ ያለው የሚወደው ግራች የሆኑት የካናዳ የተባለው በፌ"
+   },
+   "full data: Wikipedia + news": {
+    "checkpoint": "checkpoints\\demo_amharic_full\\ckpt_best.pt",
+    "train_chars": 9909215,
+    "params": 476160,
+    "vocab": 492,
+    "tests": {
+     "news (held out)": {
+      "bits_per_char": 3.252202848411352,
+      "nats_per_token": 2.25426425204236,
+      "tokens": 250000,
+      "chars": 250000,
+      "dropped_share": 0.0
+     },
+     "Wikipedia (held out)": {
+      "bits_per_char": 3.5245132467403844,
+      "nats_per_token": 2.4430162261328103,
+      "tokens": 249127,
+      "chars": 249127,
+      "dropped_share": 0.0034920000000000506
+     }
+    },
+    "valid_words": 0.8331026429710641,
+    "distinct_2": 1.0,
+    "sample": "የኢትዮጵያ ዓመት ሕዝብ እና እርግጥ እርግጥ እንዳገሩ የሰከተበ በላይ የሚያገኝባቸው ሳይሆን አገሪቱ ትልቅ ሴቶች በመሆኑን ሲል እሳት በመደበቅት መሄድ ዱኔራ ወደ አንድን ይባላል። ስለዚህ ጨዋታው ለገለጸው የሆነው አባላት ምክንያት ነው። አንዳንድ የሚቀበለ ከመምህርት የተመለከተ የተሻለ መንገድ የሚል ገለፀው ምክንያት ክርስቶስ እንደነበረው እንደመታት በሌሎች አንዱ ወይም የአባል በላይ በመሬት ዩኒቨርሲቲ ያደርገው የሚባል መንግሥት በትሮጵያ በመቶ የመንገዶች ላይ ከቴክኖሎጂ እየተለያዩ በተጠቁም መለየትምህርት በ190 እንደሚገኙበት የጉዳይነት መስመርኛ ተግባራት እና የኩባም ውስጥ ወደ 1434 ነው። በእያንዳንዱ ይህ ነው። \"በ2000 የምድብ በ2"
+   }
+  },
+  "tests": [
+   "news (held out)",
+   "Wikipedia (held out)"
+  ],
+  "prompt": "የኢትዮጵያ "
+ }
+}

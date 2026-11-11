@@ -50,12 +50,14 @@ def normalize_text(text: str, mode: str | None) -> str:
 
 def prepare_dataset(
     text: str, out_dir: str | Path, tokenizer: str = "char", bpe_vocab_size: int = 512, val_frac: float = 0.1,
-    normalize: str | None = None,
+    normalize: str | None = None, bpe_train_chars: int | None = None,
 ) -> dict:
     """Split text 90/10 (contiguous), fit a tokenizer on the TRAIN part only, write .bin files.
 
     tokenizer: "char" | "bpe_char" (BPE over characters) | "bpe"/"bpe_byte" (BPE over UTF-8 bytes).
     normalize: optional text normalisation applied BEFORE splitting/tokenizing (see data/amharic/normalize.py).
+    bpe_train_chars: learn the BPE merges on only the first N characters of the training split (much faster on big
+        corpora; the whole corpus is still encoded with the result). None = use all of it.
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -69,10 +71,10 @@ def prepare_dataset(
         tok = CharTokenizer.from_text(text) if set(val_text) - set(tok.chars) else tok
     elif tokenizer in ("bpe", "bpe_byte"):
         tok = BPETokenizer(level="byte")
-        tok.train(train_text, bpe_vocab_size)  # byte-level => val text can never contain unknown symbols
+        tok.train(train_text[:bpe_train_chars], bpe_vocab_size)  # byte-level => val text can never contain unknown symbols
     elif tokenizer == "bpe_char":
         tok = BPETokenizer(level="char")
-        tok.train(train_text, bpe_vocab_size, alphabet=set(text))  # alphabet from the whole text, as for "char"
+        tok.train(train_text[:bpe_train_chars], bpe_vocab_size, alphabet=set(text))  # alphabet always from the WHOLE text
     else:
         raise ValueError(f"unknown tokenizer {tokenizer!r}; choose from {TOKENIZERS}")
 
@@ -85,6 +87,7 @@ def prepare_dataset(
     meta = {
         "tokenizer": tokenizer,
         "normalize": normalize or "none",
+        "bpe_train_chars": bpe_train_chars,
         "vocab_size": tok.vocab_size,
         "train_tokens": len(train_ids),
         "val_tokens": len(val_ids),

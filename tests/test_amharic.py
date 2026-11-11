@@ -85,3 +85,17 @@ def test_normalization_shrinks_the_character_vocabulary(tmp_path):
     raw = prepare_dataset(text, tmp_path / "raw", "char")
     norm = prepare_dataset(text, tmp_path / "norm", "char", normalize="homophones")
     assert norm["vocab_size"] < raw["vocab_size"]
+
+
+def test_bpe_trained_on_a_sample_still_encodes_everything(tmp_path):
+    """bpe_train_chars learns merges on a prefix only; the full corpus (incl. characters after the prefix) still encodes."""
+    text = ("ሰላም ለዓለም። " * 200) + ("hello world. " * 200) + "ፀሐይ zebra\n"
+    meta = prepare_dataset(text, tmp_path / "c", "bpe_char", bpe_vocab_size=200, bpe_train_chars=500)
+    assert meta["bpe_train_chars"] == 500
+    tok = load_tokenizer(tmp_path / "c" / "tokenizer.json")
+    assert tok.decode(tok.encode(text)) == text                     # 'z', 'ፀ' appear only after the sample: still in the alphabet
+    full = prepare_dataset(text, tmp_path / "f", "bpe_char", bpe_vocab_size=200)
+    assert meta["train_tokens"] > full["train_tokens"]              # merges learned from less text compress the rest less
+    prepare_dataset(text, tmp_path / "b", "bpe_byte", bpe_vocab_size=300, bpe_train_chars=500)
+    btok = load_tokenizer(tmp_path / "b" / "tokenizer.json")
+    assert btok.decode(btok.encode(text)) == text
