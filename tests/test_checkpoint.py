@@ -30,9 +30,9 @@ def test_save_then_load_gives_identical_outputs(kw, tmp_path):
     loaded, ck = load_model(path)
 
     assert ck["step"] == 3 and ck["best_val_loss"] == 1.23
-    assert loaded.cfg == cfg                                   # architecture restored from the file
+    assert loaded.config == cfg                                   # architecture restored from the file
     if cfg.tie_weights:
-        assert loaded.lm_head.weight is loaded.embed.tok_emb.weight   # tying survives the round trip
+        assert loaded.output_head.weight is loaded.embedding.token_embedding.weight   # tying survives the round trip
     for (n1, p1), (n2, p2) in zip(model.state_dict().items(), loaded.state_dict().items()):
         assert n1 == n2 and torch.equal(p1, p2), n1
     logits_a, _ = model(x)
@@ -88,5 +88,5 @@ def test_checkpoint_embeds_tokenizer_for_every_tokenizer_type(tmp_path):
         (out / "tokenizer.json").unlink()                      # prove we do not need the side file
         model, ck = load_model(out / "ckpt_best.pt")
         tok = tokenizer_for_checkpoint(ck, out / "ckpt_best.pt")
-        assert tok.decode(tok.encode(text)) == text and tok.vocab_size == model.cfg.vocab_size
+        assert tok.decode(tok.encode(text)) == text and tok.vocab_size == model.config.vocab_size
         assert tokenizer_to_dict(tok)["type"] == {"char": "char", "bpe_char": "bpe_char", "bpe_byte": "bpe"}[tk]

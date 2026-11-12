@@ -60,7 +60,7 @@ class CharTokenizer:
 # This is a simplified version of GPT-2's regex (which uses \p{L}/\p{N} from the `regex`
 # package; we use stdlib `re` and \w instead). The alternatives cover EVERY character, so
 # "".join(chunks) == text always holds (checked in tests).
-_PRETOKENIZE = re.compile(r"""'(?:s|t|re|ve|m|ll|d)| ?\w+| ?[^\w\s]+|\s+(?!\S)|\s+""")
+_PRETOKENIZE = re.compile(r"""'(?:s|t|re|ve|m|ll|d)| ?\w+| ?[^\w\s]+|\s+(?!\S)|\s+""") # split text into words,punctuation, space, ...
 
 
 def _merge_pair(ids: list[int], pair: tuple[int, int], new_id: int) -> list[int]:

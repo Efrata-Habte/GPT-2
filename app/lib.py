@@ -190,9 +190,9 @@ def top_next_tokens(model: GPT, tok, ids: list[int], k: int = 10, temperature: f
 def attention_for_text(model: GPT, tok, text: str) -> tuple[list[str], torch.Tensor, list[str]]:
     """(token labels, attention (n_layer, n_head, T, T), dropped chars). The text is cropped to block_size tokens."""
     ids, dropped = encode_prompt_safe(tok, text)
-    ids = ids[: model.cfg.block_size]
+    ids = ids[: model.config.block_size]
     model.eval()
-    _, _, attns = model(torch.tensor([ids], dtype=torch.long), return_attn=True)
+    _, _, attns = model(torch.tensor([ids], dtype=torch.long), return_attention=True)
     return token_labels(tok, ids), torch.stack([a[0] for a in attns]).cpu(), dropped
 
 
@@ -206,7 +206,7 @@ def param_breakdown_rows(model: GPT) -> list[tuple[str, int]]:
     """Component totals (blocks aggregated) for the About tab."""
     bd = model.param_breakdown()
     rows = [(k, v) for k, v in bd.items() if not k.startswith("block ")]
-    for part in ("attention", "mlp", "layernorms"):
+    for part in ("attention", "feed-forward", "layernorms"):
         rows.append((f"all {len(model.blocks)} blocks: {part}", sum(v for k, v in bd.items() if k.startswith("block ") and k.endswith(part))))
     rows.append(("TOTAL", sum(bd.values())))
     return rows

@@ -62,6 +62,9 @@ def prepare_dataset(
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     text = normalize_text(text, normalize)
+
+## Data Spliting 90% training, 10% validation
+
     split = int((1.0 - val_frac) * len(text))
     train_text, val_text = text[:split], text[split:]
 
@@ -107,6 +110,8 @@ def load_data(data_dir: str | Path) -> dict[str, np.ndarray]:
     d = Path(data_dir)
     return {s: np.memmap(d / f"{s}.bin", dtype=np.uint16, mode="r") for s in ("train", "val")}
 
+
+## random training windows 
 
 def load_data_tokenizer(data_dir: str | Path):
     return load_tokenizer(Path(data_dir) / "tokenizer.json")

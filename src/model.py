@@ -1,12 +1,17 @@
-"""GPT-2-style model, built from scratch.
+"""GPT-2-style language model, built from scratch.
 
-Phase 1: GPTConfig, sinusoidal_encoding, Embeddings.
-Phase 2: LayerNorm, CausalSelfAttention, MLP, Block.
-Phase 3: GPT (embeddings, blocks, final LN, LM head), init, weight tying, param counts.
+Reading order (each part feeds the next):
+    GPTConfig                    the model's settings
+    TokenAndPositionEmbedding    token ids -> vectors that say WHAT each token is and WHERE it is
+    LayerNorm                    keeps each token's numbers in a stable range
+    CausalSelfAttention          each token gathers information from earlier tokens
+    FeedForward                  each token processes what it gathered, on its own
+    TransformerBlock             attention + feed-forward, each with a residual "+"
+    GPT                          embedding -> N blocks -> final LayerNorm -> next-token scores
 
-Shape notation used in comments:
-    B = batch size, T = sequence length (<= block_size), C = n_embd, V = vocab_size
-    nh = n_head, hs = head_size = C / nh
+Shape names used in the comments:
+    batch = number of sequences, seq_len = tokens per sequence (<= block_size),
+    embed_dim = n_embd (384), vocab = vocab_size, heads = n_head, head_dim = embed_dim / heads
 """
 from __future__ import annotations
 
@@ -20,15 +25,16 @@ import torch.nn.functional as F
 
 @dataclass
 class GPTConfig:
-    vocab_size: int = 65          # set from the tokenizer at runtime
-    block_size: int = 256         # max context length T
-    n_layer: int = 6
-    n_head: int = 6
-    n_embd: int = 384             # C
-    dropout: float = 0.2
-    pos_encoding: str = "learned"  # "learned" | "sinusoidal"
-    norm_position: str = "pre"     # "pre" | "post"        (used in Phase 2)
-    tie_weights: bool = True       # (used in Phase 3)
+    """The model's settings. The field names match the YAML configs and saved checkpoints."""
+    vocab_size: int = 65            # number of different tokens (set from the tokenizer)
+    block_size: int = 256           # context length: the most tokens the model can look at
+    n_layer: int = 6                # number of Transformer blocks (depth)
+    n_head: int = 6                 # attention heads per block (parallel patterns)
+    n_embd: int = 384               # numbers per token vector (width)
+    dropout: float = 0.2            # share of values switched off at random during training
+    pos_encoding: str = "learned"   # "learned" (GPT-2) | "sinusoidal" (original Transformer)
+    norm_position: str = "pre"      # "pre" (GPT-2) | "post" (original Transformer)
+    tie_weights: bool = True        # output layer reuses the token-embedding table
 
     def __post_init__(self) -> None:
         assert self.pos_encoding in ("learned", "sinusoidal"), self.pos_encoding
@@ -36,233 +42,253 @@ class GPTConfig:
         assert self.n_embd % self.n_head == 0, "n_embd must be divisible by n_head"
 
 
+# ======================================================================================
+# 1. Embedding: token ids -> vectors
+# ======================================================================================
 def sinusoidal_encoding(block_size: int, n_embd: int) -> torch.Tensor:
-    """Fixed sinusoidal positional encoding from Vaswani et al. (2017), Sec. 3.5.
+    """Fixed (not learned) position vectors from the original Transformer paper.
 
-        PE[pos, 2i]   = sin(pos / 10000^(2i / C))
-        PE[pos, 2i+1] = cos(pos / 10000^(2i / C))
+        position_vector[pos, 2i]   = sin(pos / 10000^(2i / embed_dim))
+        position_vector[pos, 2i+1] = cos(pos / 10000^(2i / embed_dim))
 
-    Returns a (block_size, n_embd) tensor. Each pair of dims is a sine/cosine of a different
-    frequency: low dims oscillate fast (resolve nearby positions), high dims slowly.
+    Each pair of numbers is a sine/cosine wave of a different speed, so every position gets a unique pattern.
+    Returns (block_size, n_embd).
     """
     assert n_embd % 2 == 0, "sinusoidal encoding needs an even n_embd"
-    pos = torch.arange(block_size, dtype=torch.float32).unsqueeze(1)             # (T, 1)
-    # 1 / 10000^(2i/C) computed as exp(-(2i/C) * ln 10000) for numerical stability
-    two_i = torch.arange(0, n_embd, 2, dtype=torch.float32)                      # (C/2,)
-    inv_freq = torch.exp(-two_i / n_embd * math.log(10000.0))                    # (C/2,)
-    angles = pos * inv_freq                                                      # (T, C/2) via broadcasting
-    pe = torch.zeros(block_size, n_embd)                                         # (T, C)
-    pe[:, 0::2] = torch.sin(angles)                                              # even dims
-    pe[:, 1::2] = torch.cos(angles)                                              # odd dims
-    return pe
+    positions = torch.arange(block_size, dtype=torch.float32).unsqueeze(1)          # (block_size, 1)
+    even_dims = torch.arange(0, n_embd, 2, dtype=torch.float32)                     # (embed_dim/2,)
+    wave_speeds = torch.exp(-even_dims / n_embd * math.log(10000.0))                # 1 / 10000^(2i/embed_dim)
+    angles = positions * wave_speeds                                                # (block_size, embed_dim/2)
+    position_vectors = torch.zeros(block_size, n_embd)
+    position_vectors[:, 0::2] = torch.sin(angles)                                   # even dims
+    position_vectors[:, 1::2] = torch.cos(angles)                                   # odd dims
+    return position_vectors
 
 
-class Embeddings(nn.Module):
-    """Token embedding + positional encoding (+ dropout): (B, T) int ids -> (B, T, C) floats.
+class TokenAndPositionEmbedding(nn.Module):
+    """token ids (batch, seq_len) -> vectors (batch, seq_len, embed_dim).
 
-    token embedding : nn.Embedding(V, C)   -- a learned lookup table, row i = vector for token i
-    positional enc. : "learned"    -> nn.Embedding(block_size, C)   (GPT-2)
-                      "sinusoidal" -> fixed buffer, no parameters   (Vaswani et al.)
+    vector = token_embedding[token]  (WHAT the token is)  +  position_vector[position]  (WHERE it is),
+    then dropout.
     """
 
-    def __init__(self, cfg: GPTConfig) -> None:
+    def __init__(self, config: GPTConfig) -> None:
         super().__init__()
-        self.cfg = cfg
-        self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.n_embd)  # weight: (V, C)
-        if cfg.pos_encoding == "learned":
-            self.pos_emb = nn.Embedding(cfg.block_size, cfg.n_embd)  # weight: (block_size, C)
-            # Deviation note: GPT-2 init -> N(0, 0.02) for both tables (nn.Embedding defaults to N(0,1)).
-            nn.init.normal_(self.tok_emb.weight, mean=0.0, std=0.02)
-            nn.init.normal_(self.pos_emb.weight, mean=0.0, std=0.02)
-            self.emb_scale = 1.0
+        self.config = config
+        self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)           # one learned row per token
+        if config.pos_encoding == "learned":
+            self.position_embedding = nn.Embedding(config.block_size, config.n_embd)    # one learned row per position
+            nn.init.normal_(self.token_embedding.weight, mean=0.0, std=0.02)            # GPT-2 init
+            nn.init.normal_(self.position_embedding.weight, mean=0.0, std=0.02)
+            self.token_scale = 1.0
         else:
-            # register_buffer: moves with .to(device), saved in state_dict, but NOT a Parameter.
-            self.register_buffer("pe", sinusoidal_encoding(cfg.block_size, cfg.n_embd), persistent=False)  # (block_size, C)
-            nn.init.normal_(self.tok_emb.weight, mean=0.0, std=0.02)
-            # Deviation from GPT-2 (follows Vaswani): scale token embeddings by sqrt(C).
-            # The sinusoid has entries in [-1, 1] while token vectors start at std 0.02, so
-            # without scaling the position signal would drown out the token identity.
-            self.emb_scale = math.sqrt(cfg.n_embd)
-        self.drop = nn.Dropout(cfg.dropout)
+            # A buffer: saved and moved with the model, but never trained.
+            self.register_buffer("sinusoidal_positions", sinusoidal_encoding(config.block_size, config.n_embd),
+                                 persistent=False)
+            nn.init.normal_(self.token_embedding.weight, mean=0.0, std=0.02)
+            # Sine values are in [-1, 1] but token vectors start near 0.02, so scale the tokens up by
+            # sqrt(embed_dim) (as in the original paper); otherwise position would drown out the token.
+            self.token_scale = math.sqrt(config.n_embd)
+        self.dropout = nn.Dropout(config.dropout)
 
-    def forward(self, idx: torch.Tensor, start_pos: int = 0) -> torch.Tensor:
-        """start_pos: absolute position of idx[:, 0]. Non-zero only with a KV cache (Phase 5),
-        where we feed just the new tokens but they must get their true positions."""
-        B, T = idx.shape                                          # idx: (B, T) integer token ids
-        assert start_pos + T <= self.cfg.block_size, f"positions up to {start_pos + T} > block_size {self.cfg.block_size}"
-        tok = self.tok_emb(idx) * self.emb_scale                  # (B, T, C)
-        if self.cfg.pos_encoding == "learned":
-            positions = torch.arange(start_pos, start_pos + T, device=idx.device)   # (T,)
-            pos = self.pos_emb(positions)                         # (T, C)
+    def forward(self, token_ids: torch.Tensor, first_position: int = 0) -> torch.Tensor:
+        """first_position: the true position of token_ids[:, 0]. It is 0 except during generation with the
+        KV cache, where only the newest token is fed in but must still get its real position."""
+        seq_len = token_ids.shape[1]
+        assert first_position + seq_len <= self.config.block_size, \
+            f"positions up to {first_position + seq_len} > block_size {self.config.block_size}"
+        token_vectors = self.token_embedding(token_ids) * self.token_scale             # (batch, seq_len, embed_dim)
+        if self.config.pos_encoding == "learned":
+            positions = torch.arange(first_position, first_position + seq_len, device=token_ids.device)
+            position_vectors = self.position_embedding(positions)                       # (seq_len, embed_dim)
         else:
-            pos = self.pe[start_pos:start_pos + T]                # (T, C)
-        x = tok + pos                                             # (B, T, C) + (T, C) -> broadcast over B
-        return self.drop(x)                                       # (B, T, C)
+            position_vectors = self.sinusoidal_positions[first_position:first_position + seq_len]
+        return self.dropout(token_vectors + position_vectors)                          # same position vectors for every sequence
 
 
 # ======================================================================================
-# Phase 2: Transformer building blocks
+# 2. LayerNorm
 # ======================================================================================
 class LayerNorm(nn.Module):
-    """Layer normalization over the last dim, written from scratch.
+    """Rescale each token's numbers to average 0 and spread 1, then apply a learned scale and shift.
 
-        y = gamma * (x - mean) / sqrt(var + eps) + beta
+        output = scale * (x - mean) / sqrt(variance + eps) + shift          (scale, shift = gamma, beta in papers)
 
-    mean/var are computed PER TOKEN over the C features (not over the batch, unlike BatchNorm).
-    var is the biased estimate (divide by C, not C-1), matching nn.LayerNorm.
+    mean and variance are taken over each token's own embed_dim numbers. The variance divides by embed_dim
+    (not embed_dim - 1), exactly like nn.LayerNorm.
     """
 
     def __init__(self, n_embd: int, eps: float = 1e-5) -> None:
         super().__init__()
-        self.eps = eps
-        self.gamma = nn.Parameter(torch.ones(n_embd))   # (C,) learnable scale
-        self.beta = nn.Parameter(torch.zeros(n_embd))   # (C,) learnable shift
+        self.eps = eps                                    # avoids dividing by zero
+        self.scale = nn.Parameter(torch.ones(n_embd))     # learned, starts as "no change"
+        self.shift = nn.Parameter(torch.zeros(n_embd))    # learned, starts as "no change"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        mean = x.mean(dim=-1, keepdim=True)                              # (B, T, 1)
-        var = x.var(dim=-1, keepdim=True, unbiased=False)                # (B, T, 1)
-        x_hat = (x - mean) / torch.sqrt(var + self.eps)                  # (B, T, C)
-        return self.gamma * x_hat + self.beta                            # (B, T, C), (C,) broadcasts
+        mean = x.mean(dim=-1, keepdim=True)                                  # (batch, seq_len, 1)
+        variance = x.var(dim=-1, keepdim=True, unbiased=False)               # (batch, seq_len, 1)
+        normalized = (x - mean) / torch.sqrt(variance + self.eps)            # average 0, spread 1
+        return self.scale * normalized + self.shift
 
 
+# ======================================================================================
+# 3. Causal self-attention
+# ======================================================================================
 class CausalSelfAttention(nn.Module):
-    """Multi-head causal (masked) self-attention.
+    """Each token looks back at earlier tokens and takes a weighted mix of their information.
 
-    For each head:  Attention(Q, K, V) = softmax(Q K^T / sqrt(d_k) + mask) V
-    where d_k = head_size. All heads are computed in parallel via an extra tensor dimension.
+        weights = softmax( mask( queries @ keys^T / sqrt(head_dim) ) )
+        output  = weights @ values
+
+    All heads are computed at once by giving them their own tensor dimension.
     """
 
-    def __init__(self, cfg: GPTConfig) -> None:
+    def __init__(self, config: GPTConfig) -> None:
         super().__init__()
-        self.n_head = cfg.n_head
-        self.n_embd = cfg.n_embd
-        self.head_size = cfg.n_embd // cfg.n_head
-        # Q, K, V projections fused into ONE Linear(C, 3C) (as in GPT-2): mathematically identical
-        # to three separate Linear(C, C) layers, but a single bigger matmul is faster.
-        self.c_attn = nn.Linear(cfg.n_embd, 3 * cfg.n_embd)
-        self.c_proj = nn.Linear(cfg.n_embd, cfg.n_embd)       # output projection W_O
-        self.c_proj.is_residual_proj = True                   # tag: Phase 3 init scales this by 1/sqrt(2*n_layer)
-        self.attn_drop = nn.Dropout(cfg.dropout)
-        self.resid_drop = nn.Dropout(cfg.dropout)
-        # Lower-triangular matrix of ones: mask[i, j] = 1 iff j <= i (token i may look at j).
-        # A buffer: moves with .to(device) but is not trained.
-        mask = torch.tril(torch.ones(cfg.block_size, cfg.block_size))
-        self.register_buffer("mask", mask.view(1, 1, cfg.block_size, cfg.block_size), persistent=False)
+        self.num_heads = config.n_head
+        self.embed_dim = config.n_embd
+        self.head_dim = config.n_embd // config.n_head
+        # One Linear makes queries, keys and values together (faster than three; same result).
+        self.query_key_value = nn.Linear(config.n_embd, 3 * config.n_embd)
+        self.output_projection = nn.Linear(config.n_embd, config.n_embd)    # mixes the heads back together
+        self.output_projection.writes_to_residual_stream = True              # gets the smaller GPT-2 init
+        self.attention_dropout = nn.Dropout(config.dropout)
+        self.output_dropout = nn.Dropout(config.dropout)
+        # causal_mask[i, j] = 1 when token i may look at token j, i.e. j <= i (lower triangle).
+        causal_mask = torch.tril(torch.ones(config.block_size, config.block_size))
+        self.register_buffer("causal_mask", causal_mask.view(1, 1, config.block_size, config.block_size),
+                             persistent=False)
 
-    def forward(self, x: torch.Tensor, return_attn: bool = False, past_kv=None, use_cache: bool = False):
-        """x: (B, T, C) -> (y: (B, T, C), attn: (B, nh, T, S) or None)   [S = T without a cache]
+    def split_into_heads(self, x: torch.Tensor) -> torch.Tensor:
+        """(batch, seq_len, embed_dim) -> (batch, heads, seq_len, head_dim)"""
+        batch, seq_len, _ = x.shape
+        return x.view(batch, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
 
-        KV cache: `past_kv = (k, v)`, each (B, nh, S_past, hs), holds the keys/values of earlier
-        tokens; x then contains only the NEW tokens. With use_cache=True a third value is returned:
-        the updated (k, v) covering past + new tokens.
+    def forward(self, x: torch.Tensor, return_attention: bool = False, cached_keys_values=None,
+                use_cache: bool = False):
+        """x: (batch, seq_len, embed_dim) -> (output, attention weights or None[, keys_values if use_cache]).
+
+        KV cache: `cached_keys_values` = (keys, values) of earlier tokens; x then holds only the NEW tokens.
         """
-        B, T, C = x.shape
-        qkv = self.c_attn(x)                                              # (B, T, 3C)
-        q, k, v = qkv.split(self.n_embd, dim=2)                           # each (B, T, C)
-        # Split C into nh heads of size hs, then move heads next to batch so matmul batches over them.
-        q = q.view(B, T, self.n_head, self.head_size).transpose(1, 2)     # (B, nh, T, hs)
-        k = k.view(B, T, self.n_head, self.head_size).transpose(1, 2)     # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, self.head_size).transpose(1, 2)     # (B, nh, T, hs)
-        if past_kv is not None:
-            # Past tokens' K and V never change (causal), so reuse them: only the new rows are computed.
-            k = torch.cat([past_kv[0], k], dim=2)                         # (B, nh, S, hs), S = S_past + T
-            v = torch.cat([past_kv[1], v], dim=2)                         # (B, nh, S, hs)
-        S = k.size(2)
+        batch, seq_len, embed_dim = x.shape
+        queries, keys, values = self.query_key_value(x).split(self.embed_dim, dim=2)
+        queries, keys, values = self.split_into_heads(queries), self.split_into_heads(keys), self.split_into_heads(values)
+        if cached_keys_values is not None:
+            # Earlier tokens' keys and values never change, so reuse them instead of recomputing.
+            keys = torch.cat([cached_keys_values[0], keys], dim=2)
+            values = torch.cat([cached_keys_values[1], values], dim=2)
+        num_visible = keys.size(2)                       # tokens that can be looked at (= seq_len without a cache)
 
-        # scores[b,h,i,j] = <q_i, k_j> / sqrt(hs): how much token i wants to read from token j
-        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_size)    # (B, nh, T, hs) @ (B, nh, hs, S) -> (B, nh, T, S)
-        # Causal mask: forbid j > i by setting those scores to -inf (softmax -> exactly 0).
-        # Query row i is the absolute position S - T + i, so use rows [S-T, S) of the mask.
-        scores = scores.masked_fill(self.mask[:, :, S - T:S, :S] == 0, float("-inf"))  # (B, nh, T, S)
-        attn = F.softmax(scores, dim=-1)                                  # (B, nh, T, S), each row sums to 1
-        attn_d = self.attn_drop(attn)                                     # (B, nh, T, S) dropout on the weights
-        y = attn_d @ v                                                    # (B, nh, T, S) @ (B, nh, S, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C)                  # (B, T, nh, hs) -> (B, T, C): concat heads
-        y = self.resid_drop(self.c_proj(y))                               # (B, T, C)
-        attn = attn if return_attn else None
-        return (y, attn, (k, v)) if use_cache else (y, attn)
+        # scores[i, j]: how well token i's query matches token j's key, scaled so softmax stays smooth.
+        scores = (queries @ keys.transpose(-2, -1)) / math.sqrt(self.head_dim)    # (batch, heads, seq_len, num_visible)
+        # Block the future: -inf becomes exactly 0 after softmax. The new tokens are the LAST seq_len rows.
+        mask = self.causal_mask[:, :, num_visible - seq_len:num_visible, :num_visible]
+        scores = scores.masked_fill(mask == 0, float("-inf"))
+        attention_weights = F.softmax(scores, dim=-1)                              # each row sums to 1
+        mixed = self.attention_dropout(attention_weights) @ values                 # (batch, heads, seq_len, head_dim)
+        mixed = mixed.transpose(1, 2).contiguous().view(batch, seq_len, embed_dim)  # join the heads back together
+        output = self.output_dropout(self.output_projection(mixed))
+
+        attention_weights = attention_weights if return_attention else None
+        return (output, attention_weights, (keys, values)) if use_cache else (output, attention_weights)
 
 
-class MLP(nn.Module):
-    """Position-wise feed-forward network: Linear(C, 4C) -> GELU -> Linear(4C, C) -> dropout."""
+# ======================================================================================
+# 4. Feed-forward network (also called the MLP)
+# ======================================================================================
+class FeedForward(nn.Module):
+    """Processes each token on its own: Linear(embed_dim -> 4*embed_dim) -> GELU -> Linear(back) -> dropout."""
 
-    def __init__(self, cfg: GPTConfig) -> None:
+    def __init__(self, config: GPTConfig) -> None:
         super().__init__()
-        self.c_fc = nn.Linear(cfg.n_embd, 4 * cfg.n_embd)
-        self.act = nn.GELU(approximate="tanh")   # GPT-2 used the tanh approximation of GELU
-        self.c_proj = nn.Linear(4 * cfg.n_embd, cfg.n_embd)
-        self.c_proj.is_residual_proj = True
-        self.drop = nn.Dropout(cfg.dropout)
+        self.expand = nn.Linear(config.n_embd, 4 * config.n_embd)          # widen: more room to compute
+        self.gelu = nn.GELU(approximate="tanh")                             # GPT-2's (tanh) version of GELU
+        self.output_projection = nn.Linear(4 * config.n_embd, config.n_embd)   # narrow back to embed_dim
+        self.output_projection.writes_to_residual_stream = True
+        self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.act(self.c_fc(x))               # (B, T, C) -> (B, T, 4C)
-        return self.drop(self.c_proj(x))         # (B, T, 4C) -> (B, T, C)
+        return self.dropout(self.output_projection(self.gelu(self.expand(x))))
 
 
-class Block(nn.Module):
-    """One transformer block with residual connections.
+# ======================================================================================
+# 5. Transformer block
+# ======================================================================================
+class TransformerBlock(nn.Module):
+    """Attention, then feed-forward, each added onto x with a residual "+".
 
-    pre-norm  (GPT-2):             x = x + Attn(LN(x));   x = x + MLP(LN(x))
-    post-norm (Vaswani et al.):    x = LN(x + Attn(x));   x = LN(x + MLP(x))
-    Pre-norm keeps a clean identity path for gradients through all layers, so it trains stably
-    without warmup tricks; post-norm normalizes the residual stream itself and is harder to train deep.
+    pre-norm  (GPT-2):                x = x + attention(norm(x));   x = x + feed_forward(norm(x))
+    post-norm (original Transformer): x = norm(x + attention(x));   x = norm(x + feed_forward(x))
+    Pre-norm keeps the "+" shortcut free of LayerNorms, so gradients flow cleanly and training is stable.
     """
 
-    def __init__(self, cfg: GPTConfig) -> None:
+    def __init__(self, config: GPTConfig) -> None:
         super().__init__()
-        self.norm_position = cfg.norm_position
-        self.ln1 = LayerNorm(cfg.n_embd)
-        self.attn = CausalSelfAttention(cfg)
-        self.ln2 = LayerNorm(cfg.n_embd)
-        self.mlp = MLP(cfg)
+        self.norm_position = config.norm_position
+        self.norm_before_attention = LayerNorm(config.n_embd)
+        self.attention = CausalSelfAttention(config)
+        self.norm_before_feed_forward = LayerNorm(config.n_embd)
+        self.feed_forward = FeedForward(config)
 
-    def forward(self, x: torch.Tensor, return_attn: bool = False, past_kv=None, use_cache: bool = False):
-        """x: (B, T, C) -> (x: (B, T, C), attn or None[, present_kv if use_cache])."""
+    def forward(self, x: torch.Tensor, return_attention: bool = False, cached_keys_values=None,
+                use_cache: bool = False):
+        """x: (batch, seq_len, embed_dim) -> (x, attention weights or None[, keys_values if use_cache])."""
         if self.norm_position == "pre":
-            a, attn, *rest = self.attn(self.ln1(x), return_attn, past_kv, use_cache)   # a: (B, T, C)
-            x = x + a                                       # residual
-            x = x + self.mlp(self.ln2(x))                   # residual
+            attended, attention_weights, *keys_values = self.attention(
+                self.norm_before_attention(x), return_attention, cached_keys_values, use_cache)
+            x = x + attended                                                       # residual
+            x = x + self.feed_forward(self.norm_before_feed_forward(x))             # residual
         else:
-            a, attn, *rest = self.attn(x, return_attn, past_kv, use_cache)
-            x = self.ln1(x + a)
-            x = self.ln2(x + self.mlp(x))
-        return (x, attn, *rest)                             # x: (B, T, C)
+            attended, attention_weights, *keys_values = self.attention(
+                x, return_attention, cached_keys_values, use_cache)
+            x = self.norm_before_attention(x + attended)
+            x = self.norm_before_feed_forward(x + self.feed_forward(x))
+        return (x, attention_weights, *keys_values)
 
 
 # ======================================================================================
-# Phase 3: the full GPT model
+# 6. The full GPT model
 # ======================================================================================
+# Older checkpoints (the trained models) used GPT-2's short names; this maps them to the names above.
+OLD_TO_NEW_PARAMETER_NAMES = {
+    "embed": "embedding", "tok_emb": "token_embedding", "pos_emb": "position_embedding",
+    "ln1": "norm_before_attention", "ln2": "norm_before_feed_forward", "attn": "attention", "mlp": "feed_forward",
+    "c_attn": "query_key_value", "c_proj": "output_projection", "c_fc": "expand",
+    "ln_f": "final_norm", "lm_head": "output_head", "gamma": "scale", "beta": "shift",
+}
+
+
+def rename_old_parameter_names(state_dict: dict) -> dict:
+    """'blocks.0.attn.c_attn.weight' -> 'blocks.0.attention.query_key_value.weight' (new names pass unchanged)."""
+    return {".".join(OLD_TO_NEW_PARAMETER_NAMES.get(part, part) for part in name.split(".")): tensor
+            for name, tensor in state_dict.items()}
+
+
 class GPT(nn.Module):
-    """GPT-2-style decoder-only language model.
+    """token ids -> embedding -> n_layer TransformerBlocks -> final LayerNorm -> output head -> next-token scores"""
 
-    idx (B, T) -> Embeddings (B, T, C) -> N x Block (B, T, C) -> final LayerNorm -> lm_head -> logits (B, T, V)
-    """
-
-    def __init__(self, cfg: GPTConfig) -> None:
+    def __init__(self, config: GPTConfig) -> None:
         super().__init__()
-        self.cfg = cfg
-        self.embed = Embeddings(cfg)                                        # token + position + dropout
-        self.blocks = nn.ModuleList([Block(cfg) for _ in range(cfg.n_layer)])
-        # Final LayerNorm. Pre-norm blocks leave the residual stream un-normalized, so GPT-2 normalizes
-        # it once before the head. Post-norm blocks already end with a LayerNorm, so we skip it
-        # (the original decoder has no extra final norm either).
-        self.ln_f = LayerNorm(cfg.n_embd) if cfg.norm_position == "pre" else nn.Identity()
-        self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)   # weight: (V, C)
-        if cfg.tie_weights:
-            # Weight tying: the SAME (V, C) matrix embeds tokens and un-embeds hidden states.
-            # Saves V*C params and ties "what a token means going in" to "how it is scored coming out".
-            self.lm_head.weight = self.embed.tok_emb.weight
-        self.apply(self._init_weights)
-        # GPT-2 scaled init: each block adds 2 residual contributions (attn + mlp), so 2*n_layer
-        # in total. Scaling their output projections by 1/sqrt(2*n_layer) keeps the variance of
-        # the residual stream from growing with depth.
+        self.config = config
+        self.embedding = TokenAndPositionEmbedding(config)
+        self.blocks = nn.ModuleList([TransformerBlock(config) for _ in range(config.n_layer)])
+        # Pre-norm blocks never normalise the main path, so normalise it once at the end.
+        # (Post-norm blocks already end with a LayerNorm, so none is needed.)
+        self.final_norm = LayerNorm(config.n_embd) if config.norm_position == "pre" else nn.Identity()
+        self.output_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)   # one score per token
+        if config.tie_weights:
+            # Weight tying: the output head reuses the token-embedding table (saves vocab x embed_dim parameters).
+            self.output_head.weight = self.embedding.token_embedding.weight
+        self.apply(self.gpt2_init)
+        # The 2 * n_layer layers that write onto the residual stream start smaller, so the running sum
+        # does not grow with depth.
         for module in self.modules():
-            if getattr(module, "is_residual_proj", False):
-                nn.init.normal_(module.weight, mean=0.0, std=0.02 / math.sqrt(2 * cfg.n_layer))
+            if getattr(module, "writes_to_residual_stream", False):
+                nn.init.normal_(module.weight, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
 
     @staticmethod
-    def _init_weights(module: nn.Module) -> None:
-        """GPT-2 init: N(0, 0.02) for Linear/Embedding weights, zeros for biases."""
+    def gpt2_init(module: nn.Module) -> None:
+        """GPT-2 init: weights from N(0, 0.02), biases 0."""
         if isinstance(module, nn.Linear):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
@@ -270,78 +296,80 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None, return_attn: bool = False,
-                past_kvs: list | None = None, use_cache: bool = False):
-        """idx: (B, T) token ids; targets: (B, T) next-token ids or None.
+    def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
+        """Also accepts checkpoints saved with the old GPT-2-style names."""
+        return super().load_state_dict(rename_old_parameter_names(state_dict), strict=strict, assign=assign)
 
-        Returns (logits, loss) followed by, in this order and only if requested:
-            attns   (return_attn=True): list of n_layer tensors (B, nh, T, S)
-            presents (use_cache=True):  list of n_layer (k, v) pairs -> pass back as `past_kvs`
-        logits: (B, T, V), loss: scalar or None.
+    def forward(self, token_ids: torch.Tensor, targets: torch.Tensor | None = None, return_attention: bool = False,
+                cached_keys_values: list | None = None, use_cache: bool = False):
+        """token_ids: (batch, seq_len); targets: the true next tokens (batch, seq_len), or None.
 
-        KV-cache use: `past_kvs` holds keys/values of the first S_past tokens and `idx` only the
-        NEW tokens, which are placed at positions S_past, S_past+1, ...
+        Returns (logits, loss), plus, only when asked for:
+            attention weights of every layer (return_attention=True)
+            keys/values of every layer (use_cache=True) -> pass back as `cached_keys_values` for the next step
+        logits: (batch, seq_len, vocab) scores for the next token; loss: a number, or None without targets.
         """
-        start_pos = 0 if past_kvs is None else past_kvs[0][0].size(2)
-        x = self.embed(idx, start_pos)                                      # (B, T, C)
-        attns, presents = [], []
-        for i, block in enumerate(self.blocks):
-            x, attn, *rest = block(x, return_attn, None if past_kvs is None else past_kvs[i], use_cache)  # x: (B, T, C)
-            attns.append(attn)
-            presents.extend(rest)
-        x = self.ln_f(x)                                                    # (B, T, C)
-        logits = self.lm_head(x)                                            # (B, T, V)
+        first_position = 0 if cached_keys_values is None else cached_keys_values[0][0].size(2)
+        x = self.embedding(token_ids, first_position)
+        all_attention_weights, all_keys_values = [], []
+        for layer, block in enumerate(self.blocks):
+            layer_cache = None if cached_keys_values is None else cached_keys_values[layer]
+            x, attention_weights, *keys_values = block(x, return_attention, layer_cache, use_cache)
+            all_attention_weights.append(attention_weights)
+            all_keys_values.extend(keys_values)
+        logits = self.output_head(self.final_norm(x))                       # (batch, seq_len, vocab)
 
         loss = None
         if targets is not None:
-            # cross_entropy wants (N, V) scores and (N,) class ids: flatten batch and time together.
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))  # scalar
-        out = (logits, loss)
-        if return_attn:
-            out += (attns,)
+            # Cross-entropy at every position: how surprised was the model by the real next token?
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+        result = (logits, loss)
+        if return_attention:
+            result += (all_attention_weights,)
         if use_cache:
-            out += (presents,)
-        return out
+            result += (all_keys_values,)
+        return result
 
-    # ---- parameter accounting -------------------------------------------------------
+    # ---- parameter counting ------------------------------------------------------------
     def param_breakdown(self) -> dict[str, int]:
-        """Parameters per component. Shared (tied) tensors are counted once, where first seen."""
-        seen: set[int] = set()
+        """Parameters per component. A shared (tied) tensor is counted once, where it is first seen."""
+        already_counted: set[int] = set()
 
         def count(module: nn.Module) -> int:
-            n = 0
-            for p in module.parameters():
-                if id(p) not in seen:
-                    seen.add(id(p))
-                    n += p.numel()
-            return n
+            total = 0
+            for parameter in module.parameters():
+                if id(parameter) not in already_counted:
+                    already_counted.add(id(parameter))
+                    total += parameter.numel()
+            return total
 
-        out = {"token embedding": count(self.embed.tok_emb)}
-        if self.cfg.pos_encoding == "learned":
-            out["position embedding"] = count(self.embed.pos_emb)
-        for i, blk in enumerate(self.blocks):
-            out[f"block {i}: attention"] = count(blk.attn)
-            out[f"block {i}: mlp"] = count(blk.mlp)
-            out[f"block {i}: layernorms"] = count(blk.ln1) + count(blk.ln2)
-        out["final layernorm"] = count(self.ln_f)
-        out["lm_head (0 if tied)"] = count(self.lm_head)
-        return out
+        breakdown = {"token embedding": count(self.embedding.token_embedding)}
+        if self.config.pos_encoding == "learned":
+            breakdown["position embedding"] = count(self.embedding.position_embedding)
+        for i, block in enumerate(self.blocks):
+            breakdown[f"block {i}: attention"] = count(block.attention)
+            breakdown[f"block {i}: feed-forward"] = count(block.feed_forward)
+            breakdown[f"block {i}: layernorms"] = count(block.norm_before_attention) + count(block.norm_before_feed_forward)
+        breakdown["final layernorm"] = count(self.final_norm)
+        breakdown["output head (0 if tied)"] = count(self.output_head)
+        return breakdown
 
     def num_params(self) -> int:
         return sum(self.param_breakdown().values())
 
     def print_param_breakdown(self) -> None:
-        bd = self.param_breakdown()
-        total = sum(bd.values())
-        rows = {k: v for k, v in bd.items() if not k.startswith("block ")}
-        for part in ("attention", "mlp", "layernorms"):
-            rows[f"all blocks: {part}"] = sum(v for k, v in bd.items() if k.startswith("block ") and k.endswith(part))
+        breakdown = self.param_breakdown()
+        total = sum(breakdown.values())
+        rows = {name: n for name, n in breakdown.items() if not name.startswith("block ")}
+        for part in ("attention", "feed-forward", "layernorms"):
+            rows[f"all blocks: {part}"] = sum(n for name, n in breakdown.items()
+                                               if name.startswith("block ") and name.endswith(part))
         print(f"{'component':<28}{'params':>12}{'share':>9}")
-        for k, v in rows.items():
-            print(f"{k:<28}{v:>12,}{100 * v / total:>8.1f}%")
+        for name, n in rows.items():
+            print(f"{name:<28}{n:>12,}{100 * n / total:>8.1f}%")
         print(f"{'TOTAL':<28}{total:>12,}")
-        per_block = sum(v for k, v in bd.items() if k.startswith("block 0"))
-        print(f"(one block = {per_block:,} params; n_layer = {self.cfg.n_layer}; tied = {self.cfg.tie_weights})")
+        one_block = sum(n for name, n in breakdown.items() if name.startswith("block 0"))
+        print(f"(one block = {one_block:,} params; n_layer = {self.config.n_layer}; tied = {self.config.tie_weights})")
 
 
 if __name__ == "__main__":
@@ -349,8 +377,8 @@ if __name__ == "__main__":
 
     from src.utils import load_config
 
-    ap = argparse.ArgumentParser(description="Print the parameter breakdown for a config.")
-    ap.add_argument("--config", default="configs/small.yaml")
-    ap.add_argument("--vocab_size", type=int, default=65)
-    a = ap.parse_args()
-    GPT(GPTConfig(vocab_size=a.vocab_size, **load_config(a.config)["model"])).print_param_breakdown()
+    parser = argparse.ArgumentParser(description="Print the parameter breakdown for a config.")
+    parser.add_argument("--config", default="configs/small.yaml")
+    parser.add_argument("--vocab_size", type=int, default=65)
+    args = parser.parse_args()
+    GPT(GPTConfig(vocab_size=args.vocab_size, **load_config(args.config)["model"])).print_param_breakdown()

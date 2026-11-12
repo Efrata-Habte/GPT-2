@@ -31,7 +31,7 @@ from src.generate import generate
 def per_position_loss(model, data, n_windows: int, device: str, seed: int = 0, batch: int = 64) -> torch.Tensor:
     """Mean cross-entropy at each position over `n_windows` random windows. Returns (block_size,)."""
     model.eval()
-    T, V = model.cfg.block_size, model.cfg.vocab_size
+    T, V = model.config.block_size, model.config.vocab_size
     gen = torch.Generator().manual_seed(seed)
     total, n = torch.zeros(T), 0
     while n < n_windows:
@@ -65,7 +65,7 @@ def main() -> None:
     dev = default_device()
     model, ck, tok, data_dir = load_bundle(a.ckpt, dev)
     val = load_data(data_dir)["val"]
-    T = model.cfg.block_size
+    T = model.config.block_size
 
     # ---- Part A ----
     curve = per_position_loss(model, val, a.n_windows, dev).tolist()

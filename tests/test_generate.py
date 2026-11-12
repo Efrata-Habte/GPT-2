@@ -28,7 +28,7 @@ def test_cached_logits_match_full_forward(kw):
     full, _ = m(idx)                                            # (2, 14, V)
     _, _, past = m(idx[:, :5], use_cache=True)
     for t in range(5, 14):
-        step, _, past = m(idx[:, t:t + 1], past_kvs=past, use_cache=True)
+        step, _, past = m(idx[:, t:t + 1], cached_keys_values=past, use_cache=True)
         assert torch.allclose(step[:, 0], full[:, t], atol=1e-5), t
     assert past[0][0].shape == (2, 2, 14, 16)                   # (B, nh, S, hs)
 

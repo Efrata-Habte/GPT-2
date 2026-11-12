@@ -88,22 +88,22 @@ def main() -> None:
     enter_repo_root()
     dev = default_device()
     model, ck, tok, data_dir = load_bundle(a.ckpt, dev)
-    nl, nh = model.cfg.n_layer, model.cfg.n_head
+    nl, nh = model.config.n_layer, model.config.n_head
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
     # ---- statistics over held-out windows ----
-    T = min(a.stat_len, model.cfg.block_size)
+    T = min(a.stat_len, model.config.block_size)
     x, _ = get_batch(load_data(data_dir)["val"], a.n_windows, T, torch.Generator().manual_seed(0), dev)
-    _, _, attns = model(x, return_attn=True)
+    _, _, attns = model(x, return_attention=True)
     punct = punct_mask(tok, x.cpu()).to(dev)
     stats = [{k: v.cpu() for k, v in head_statistics(att, punct).items()} for att in attns]
     labels = [[label_head({k: float(v[h]) for k, v in stats[l].items()}) for h in range(nh)] for l in range(nl)]
 
     # ---- the sentence ----
-    ids = tok.encode(a.sentence)[: model.cfg.block_size]
+    ids = tok.encode(a.sentence)[: model.config.block_size]
     sx = torch.tensor([ids], device=dev)
-    _, _, s_attns = model(sx, return_attn=True)
+    _, _, s_attns = model(sx, return_attention=True)
     s_attns = [t[0].cpu() for t in s_attns]                                      # each (nh, T, T)
     toks = token_labels(tok, ids)
 

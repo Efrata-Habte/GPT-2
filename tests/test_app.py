@@ -42,7 +42,7 @@ def test_exported_checkpoint_is_slim_and_loads(ckpt_dir):
     ck = torch.load(p, weights_only=False)
     assert "optimizer" not in ck and {"model", "model_config", "tokenizer"} <= set(ck)
     model, tok, info = lib.load_demo_model(p)
-    assert info["vocab_size"] == tok.vocab_size == model.cfg.vocab_size and info["params"] == model.num_params()
+    assert info["vocab_size"] == tok.vocab_size == model.config.vocab_size and info["params"] == model.num_params()
     assert tok.decode(tok.encode(AM[:50])) == AM[:50]
 
 
@@ -115,10 +115,10 @@ def test_attention_for_text_shapes_and_causality(ckpt_dir):
     model, tok, _ = lib.load_demo_model(ckpt_dir / "english" / "model.pt")
     labels, attn, dropped = lib.attention_for_text(model, tok, "To be, or not")
     T = len(labels)
-    assert attn.shape == (model.cfg.n_layer, model.cfg.n_head, T, T) and not dropped
+    assert attn.shape == (model.config.n_layer, model.config.n_head, T, T) and not dropped
     assert torch.allclose(attn.sum(-1), torch.ones(attn.shape[:3]), atol=1e-5) and torch.all(attn.triu(1) == 0)
     long_labels, _, _ = lib.attention_for_text(model, tok, "e" * 200)
-    assert len(long_labels) == model.cfg.block_size                              # cropped to the context window
+    assert len(long_labels) == model.config.block_size                              # cropped to the context window
 
 
 # ---------------- tokenizer playground ----------------

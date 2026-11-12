@@ -35,7 +35,7 @@ def test_bits_per_char(model, tok, text: str, device: str = "cpu", batch: int = 
     the first of each window is predicted, total nats / ln 2 / characters. Works for any tokenizer."""
     model.eval()
     ids = tok.encode(text)
-    T = model.cfg.block_size
+    T = model.config.block_size
     windows = [ids[i:i + T + 1] for i in range(0, len(ids) - 1, T)]
     windows = [w for w in windows if len(w) >= 2]
     total_nats, n_pred = 0.0, 0

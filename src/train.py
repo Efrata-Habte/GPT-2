@@ -85,7 +85,7 @@ def save_checkpoint(path: Path, model, opt, scaler, cfg: dict, step: int, best_v
     torch.save({
         "model": model.state_dict(), "optimizer": opt.state_dict(),
         "scaler": scaler.state_dict() if scaler is not None else None,
-        "config": cfg, "model_config": asdict(model.cfg), "step": step, "best_val_loss": best_val,
+        "config": cfg, "model_config": asdict(model.config), "step": step, "best_val_loss": best_val,
         "batch_gen_state": gen.get_state(), "torch_rng_state": torch.get_rng_state(), "tokenizer": tokenizer,
     }, path)
 

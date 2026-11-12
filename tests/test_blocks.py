@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from src.model import MLP, Block, CausalSelfAttention, GPTConfig, LayerNorm
+from src.model import CausalSelfAttention, FeedForward, GPTConfig, LayerNorm, TransformerBlock
 
 
 def make_cfg(**kw) -> GPTConfig:
@@ -16,11 +16,11 @@ def make_cfg(**kw) -> GPTConfig:
 def test_layernorm_matches_torch():
     torch.manual_seed(0)
     mine, ref = LayerNorm(32), nn.LayerNorm(32, eps=1e-5)
-    with torch.no_grad():  # non-trivial gamma/beta so we test them too
+    with torch.no_grad():  # non-trivial scale/shift so we test them too
         g, b = torch.randn(32), torch.randn(32)
-        mine.gamma.copy_(g)
+        mine.scale.copy_(g)
         ref.weight.copy_(g)
-        mine.beta.copy_(b)
+        mine.shift.copy_(b)
         ref.bias.copy_(b)
     x = torch.randn(4, 10, 32) * 3 + 1
     x2 = x.clone().requires_grad_()
@@ -31,13 +31,13 @@ def test_layernorm_matches_torch():
     y1.backward(g)
     y2.backward(g)
     assert torch.allclose(x1.grad, x2.grad, atol=1e-5)
-    assert torch.allclose(mine.gamma.grad, ref.weight.grad, atol=1e-4)
+    assert torch.allclose(mine.scale.grad, ref.weight.grad, atol=1e-4)
 
 
 def test_layernorm_shape_and_parameters():
     ln = LayerNorm(64)
     assert ln(torch.randn(3, 5, 64)).shape == (3, 5, 64)
-    assert [tuple(p.shape) for p in ln.parameters()] == [(64,), (64,)]   # gamma, beta
+    assert [tuple(p.shape) for p in ln.parameters()] == [(64,), (64,)]   # scale, shift
 
 
 def test_layernorm_output_statistics():
@@ -49,7 +49,7 @@ def test_layernorm_output_statistics():
 def test_attention_shapes_and_weights():
     cfg = make_cfg()
     attn = CausalSelfAttention(cfg).eval()
-    y, w = attn(torch.randn(2, 10, cfg.n_embd), return_attn=True)
+    y, w = attn(torch.randn(2, 10, cfg.n_embd), return_attention=True)
     assert y.shape == (2, 10, cfg.n_embd)
     assert w.shape == (2, cfg.n_head, 10, 10)
     assert torch.allclose(w.sum(-1), torch.ones(2, cfg.n_head, 10), atol=1e-5)  # rows sum to 1
@@ -65,8 +65,8 @@ def test_attention_matches_naive_per_head_loop():
     x = torch.randn(2, 7, cfg.n_embd)
     y, _ = attn(x)
 
-    W, b = attn.c_attn.weight, attn.c_attn.bias             # (3C, C), (3C,)
-    hs, C = attn.head_size, cfg.n_embd
+    W, b = attn.query_key_value.weight, attn.query_key_value.bias             # (3C, C), (3C,)
+    hs, C = attn.head_dim, cfg.n_embd
     outs = []
     for bi in range(2):
         heads = []
@@ -77,7 +77,7 @@ def test_attention_matches_naive_per_head_loop():
             s = q @ k.T / math.sqrt(hs)
             s = s.masked_fill(torch.triu(torch.ones(7, 7), 1).bool(), float("-inf"))
             heads.append(torch.softmax(s, -1) @ v)
-        outs.append(attn.c_proj(torch.cat(heads, dim=-1)))
+        outs.append(attn.output_projection(torch.cat(heads, dim=-1)))
     assert torch.allclose(y, torch.stack(outs), atol=1e-5)
 
 
@@ -85,7 +85,7 @@ def test_attention_matches_naive_per_head_loop():
 def test_block_shape_and_causality(norm):
     torch.manual_seed(0)
     cfg = make_cfg(norm_position=norm)
-    blk = Block(cfg).eval()
+    blk = TransformerBlock(cfg).eval()
     x = torch.randn(2, 12, cfg.n_embd)
     y, _ = blk(x)
     assert y.shape == x.shape
@@ -98,15 +98,15 @@ def test_block_shape_and_causality(norm):
 
 def test_mlp_shape_and_hidden_size():
     cfg = make_cfg()
-    mlp = MLP(cfg)
-    assert mlp.c_fc.out_features == 4 * cfg.n_embd
+    mlp = FeedForward(cfg)
+    assert mlp.expand.out_features == 4 * cfg.n_embd
     assert mlp(torch.randn(2, 5, cfg.n_embd)).shape == (2, 5, cfg.n_embd)
 
 
 def test_block_pre_vs_post_differ_and_return_attn():
     cfg = make_cfg()
-    blk = Block(cfg).eval()
-    _, w = blk(torch.randn(1, 6, cfg.n_embd), return_attn=True)
+    blk = TransformerBlock(cfg).eval()
+    _, w = blk(torch.randn(1, 6, cfg.n_embd), return_attention=True)
     assert w.shape == (1, cfg.n_head, 6, 6)
 
 

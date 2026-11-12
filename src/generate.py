@@ -92,7 +92,7 @@ def generate_stream(
     """
     was_training = model.training
     model.eval()
-    block_size = model.cfg.block_size
+    block_size = model.config.block_size
     past = None
     try:
         for _ in range(max_new_tokens):
@@ -103,7 +103,7 @@ def generate_stream(
                 logits, _, past = model(idx[:, -block_size:], use_cache=True)        # (B, T', V)
             else:
                 # Decode: feed ONLY the newest token; its position = number of cached tokens.
-                logits, _, past = model(idx[:, -1:], past_kvs=past, use_cache=True)  # (B, 1, V)
+                logits, _, past = model(idx[:, -1:], cached_keys_values=past, use_cache=True)  # (B, 1, V)
             next_id = sample_next(logits[:, -1, :], temperature, top_k, top_p, greedy, generator)  # (B, 1)
             idx = torch.cat([idx, next_id], dim=1)                                   # (B, T+1)
             yield next_id
@@ -133,7 +133,7 @@ def last_token_logits(model: GPT, idx: torch.Tensor) -> torch.Tensor:
     """Logits for the token that follows `idx` (1, T): (V,). Context is cropped to block_size."""
     was_training = model.training
     model.eval()
-    logits, _ = model(idx[:, -model.cfg.block_size:])
+    logits, _ = model(idx[:, -model.config.block_size:])
     model.train(was_training)
     return logits[0, -1]
 
@@ -171,7 +171,7 @@ def encode_prompt(tok, prompt: str, device: str) -> torch.Tensor:
 
 def benchmark(model: GPT, prompt_len: int, new_tokens: int, device: str) -> dict:
     """Tokens/sec with vs. without the KV cache (greedy), and check the outputs are identical."""
-    V = model.cfg.vocab_size
+    V = model.config.vocab_size
     g = torch.Generator().manual_seed(0)
     prompt = torch.randint(0, V, (1, prompt_len), generator=g).to(device)
     res = {}
@@ -219,7 +219,7 @@ def main() -> None:
         else:
             from src.utils import load_config
             model = GPT(GPTConfig(vocab_size=65, **load_config(a.config)["model"])).to(a.device).eval()
-        bs = model.cfg.block_size
+        bs = model.config.block_size
         r = benchmark(model, prompt_len=16, new_tokens=bs - 16, device=a.device)  # stays inside block_size
         lines = [
             f"KV-cache benchmark ({a.device}, {model.num_params():,} params, block_size={bs}, "

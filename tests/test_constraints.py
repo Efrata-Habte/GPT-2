@@ -66,7 +66,7 @@ def test_built_model_contains_only_basic_layers():
     assert not any(isinstance(m, nn.LayerNorm) for m in model.modules())
     assert not any(isinstance(m, nn.MultiheadAttention) for m in model.modules())
     own = {type(m).__name__ for m in model.modules() if type(m).__module__.startswith("src.")}
-    assert {"LayerNorm", "CausalSelfAttention", "MLP", "Block", "Embeddings", "GPT"} <= own
+    assert {"LayerNorm", "CausalSelfAttention", "FeedForward", "TransformerBlock", "TokenAndPositionEmbedding", "GPT"} <= own
 
 
 def test_no_pretrained_weight_files_are_used():

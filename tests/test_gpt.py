@@ -27,7 +27,7 @@ def test_forward_shapes(kw):
     idx = torch.randint(0, cfg.vocab_size, (3, 10))
     logits, loss = m(idx)
     assert logits.shape == (3, 10, cfg.vocab_size) and loss is None
-    logits, loss, attns = m(idx, idx, return_attn=True)
+    logits, loss, attns = m(idx, idx, return_attention=True)
     assert loss.ndim == 0
     assert len(attns) == cfg.n_layer and attns[0].shape == (3, cfg.n_head, 10, 10)
 
@@ -44,7 +44,7 @@ def test_initial_loss_is_ln_vocab(kw):
 
 def test_weight_tying():
     tied, untied = GPT(make_cfg()), GPT(make_cfg(tie_weights=False))
-    assert tied.lm_head.weight is tied.embed.tok_emb.weight
+    assert tied.output_head.weight is tied.embedding.token_embedding.weight
     assert untied.num_params() - tied.num_params() == 50 * 32
     # breakdown must agree with PyTorch's own unique-parameter count
     assert tied.num_params() == sum(p.numel() for p in tied.parameters())
@@ -55,12 +55,12 @@ def test_gpt2_init_statistics():
     torch.manual_seed(0)
     cfg = make_cfg(n_layer=4, n_embd=128, n_head=4)
     m = GPT(cfg)
-    assert m.blocks[0].attn.c_attn.weight.std().item() == pytest.approx(0.02, rel=0.1)
+    assert m.blocks[0].attention.query_key_value.weight.std().item() == pytest.approx(0.02, rel=0.1)
     expected = 0.02 / math.sqrt(2 * cfg.n_layer)
     for blk in m.blocks:
-        assert blk.attn.c_proj.weight.std().item() == pytest.approx(expected, rel=0.1)
-        assert blk.mlp.c_proj.weight.std().item() == pytest.approx(expected, rel=0.1)
-    assert torch.all(m.blocks[0].attn.c_attn.bias == 0)
+        assert blk.attention.output_projection.weight.std().item() == pytest.approx(expected, rel=0.1)
+        assert blk.feed_forward.output_projection.weight.std().item() == pytest.approx(expected, rel=0.1)
+    assert torch.all(m.blocks[0].attention.query_key_value.bias == 0)
 
 
 @pytest.mark.parametrize("kw", VARIANTS)
