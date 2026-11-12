@@ -163,25 +163,6 @@ def test_tokenize_for_display_statistics():
     assert lib.tokenize_for_display(chars, "")["n_tokens"] == 0
 
 
-# ---------------- results helpers ----------------
-def test_split_markdown_images(tmp_path):
-    (tmp_path / "a.png").write_bytes(b"x")
-    parts = lib.split_markdown_images("# T\n\n![fig](a.png)\n\ntext ![x](missing.png) end", tmp_path)
-    kinds = [k for k, _ in parts]
-    assert kinds[:2] == ["md", "img"] and parts[1][1].endswith("a.png") and any("missing image" in p for _, p in parts)
-
-
-def test_find_runs_and_curves(tmp_path):
-    run = tmp_path / "checkpoints" / "r1"
-    run.mkdir(parents=True)
-    (run / "log.csv").write_text("step,lr,train_loss,tokens_per_sec,eval_train_loss,eval_val_loss,elapsed_s\n"
-                                 "0,0.1,,,4.0,4.1,1\n10,0.1,3.5,100,,,2\n20,0.1,,,3.0,3.2,3\n")
-    runs = lib.find_training_runs(tmp_path)
-    assert list(runs) == ["checkpoints/r1"]
-    c = lib.run_curves(runs["checkpoints/r1"])
-    assert c["val (eval)"] == [(0, 4.1), (20, 3.2)] and c["train (batch avg)"] == [(10, 3.5)]
-
-
 def test_param_breakdown_rows_total(ckpt_dir):
     model, _, _ = lib.load_demo_model(ckpt_dir / "english" / "model.pt")
     assert lib.param_breakdown_rows(model)[-1] == ("TOTAL", model.num_params())
@@ -202,7 +183,7 @@ def app(ckpt_dir, monkeypatch):
 def test_app_starts_and_has_all_tabs_and_selector(app):
     app.run()
     assert not app.exception, [e.value for e in app.exception]
-    assert len(app.tabs) == 9 and app.tabs[0].label.endswith("Generate")
+    assert len(app.tabs) == 7 and app.tabs[0].label.endswith("Generate")
     assert app.sidebar.radio[0].options == ["English", "Amharic"]
 
 
@@ -249,7 +230,7 @@ def test_app_runs_in_a_fresh_process_like_streamlit_does(ckpt_dir):
     env = {**os.environ, "GPT_DEMO_CKPT_DIR": str(ckpt_dir), "PYTHONUTF8": "1"}
     env.pop("PYTHONPATH", None)
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, env=env, timeout=600)
-    assert r.returncode == 0 and "TABS 9" in r.stdout, (r.stdout[-500:], r.stderr[-1500:])
+    assert r.returncode == 0 and "TABS 7" in r.stdout, (r.stdout[-500:], r.stderr[-1500:])
 
 
 def test_app_training_data_selector_and_comparison_tab(app):

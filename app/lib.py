@@ -5,14 +5,10 @@ Hugging Face / pretrained models.
 """
 from __future__ import annotations
 
-import csv
 import html
 import json
-import math
 import os
-import re
 import sys
-from collections import Counter
 from pathlib import Path
 
 import torch
@@ -287,55 +283,3 @@ def apply_normalization(text: str, mode: str = "homophones") -> tuple[str, int]:
     from data.amharic.normalize import changed_positions, normalize_amharic
     out = normalize_amharic(text, mode)
     return out, len(changed_positions(text, out)) if len(out) == len(text) else sum(a != b for a, b in zip(text, out))
-
-
-# ----------------------------------------------------------------------------------------------
-# Results / study data
-# ----------------------------------------------------------------------------------------------
-def read_csv_rows(path: str | Path) -> list[dict]:
-    p = Path(path)
-    if not p.exists():
-        return []
-    with open(p, encoding="utf-8", newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def split_markdown_images(md: str, base_dir: str | Path) -> list[tuple[str, str]]:
-    """Split markdown into ("md", text) and ("img", path) parts so images can be shown with st.image."""
-    parts, last = [], 0
-    for m in re.finditer(r"!\[[^\]]*\]\(([^)\s]+)\)", md):
-        if md[last:m.start()].strip():
-            parts.append(("md", md[last:m.start()]))
-        img = Path(base_dir) / m.group(1)
-        parts.append(("img", str(img)) if img.exists() else ("md", f"*(missing image {m.group(1)})*"))
-        last = m.end()
-    if md[last:].strip():
-        parts.append(("md", md[last:]))
-    return parts
-
-
-def list_result_reports(results_dir: str | Path | None = None) -> list[Path]:
-    """All markdown reports under results/ (excluding per-run folders), sorted by name."""
-    base = Path(results_dir) if results_dir else ROOT / "results"
-    return sorted(p for p in base.rglob("*.md") if "runs" not in p.relative_to(base).parts)
-
-
-def find_training_runs(root: str | Path | None = None) -> dict[str, Path]:
-    """{name: run dir} for every folder containing a log.csv (checkpoints/* and results/runs/**)."""
-    r = Path(root) if root else ROOT
-    runs = {}
-    for base in (r / "checkpoints", r / "results" / "runs"):
-        if base.exists():
-            for log in sorted(base.rglob("log.csv")):
-                runs[str(log.parent.relative_to(r)).replace("\\", "/")] = log.parent
-    return runs
-
-
-def run_curves(run_dir: str | Path) -> dict[str, list[tuple[int, float]]]:
-    """{"train (eval)": [(step, loss)], "val (eval)": [...], "train (batch)": [...]} from a run's log.csv."""
-    rows = read_csv_rows(Path(run_dir) / "log.csv")
-
-    def col(name):
-        return [(int(r["step"]), float(r[name])) for r in rows if r.get(name)]
-
-    return {"train (batch avg)": col("train_loss"), "train (eval)": col("eval_train_loss"), "val (eval)": col("eval_val_loss")}

@@ -36,8 +36,6 @@ plt.style.use("dark_background")                  # matplotlib figures (attentio
 plt.rcParams.update({"figure.facecolor": "#0E1117", "axes.facecolor": "#0E1117", "savefig.facecolor": "#0E1117"})
 setup_ethiopic_font()
 FONT = lib.ETHIOPIC_CSS_FONTS
-RESULTS = ROOT / "results"
-AM_RESULTS = RESULTS / "amharic"
 
 st.set_page_config(page_title="GPT from scratch", layout="wide")
 ACCENT = "#6366F1"
@@ -187,7 +185,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 tabs = st.tabs(["Generate", "Next-token inspector", "Temperature comparison", "Small vs full data", "Attention explorer",
-                "Tokenizer playground", "Amharic study", "Training & experiments", "About"])
+                "Tokenizer playground", "About"])
 
 # ----------------------------------------------------------------------------------------------
 # 1. Generate
@@ -375,119 +373,9 @@ with tabs[5]:
                    "character-level tokenizers start with one token per letter but need a large alphabet (and cannot encode unseen letters).")
 
 # ----------------------------------------------------------------------------------------------
-# 6. Amharic study
+# 6. About
 # ----------------------------------------------------------------------------------------------
 with tabs[6]:
-    st.subheader("Amharic (Ge'ez script) study")
-    rows = lib.read_csv_rows(AM_RESULTS / "tokenizer_stats.csv")
-    if not rows:
-        st.info("Run `python experiments/exp11_amharic_study.py` to generate the study data (results/amharic/).")
-    else:
-        df = pd.DataFrame(rows)
-        for c in ("requested_vocab", "vocab_size", "tokens", "tokens_per_char", "chars_per_token", "bytes_per_token", "fertility",
-                  "types_for_95", "types_for_99", "used_share", "fragment_share"):
-            df[c] = pd.to_numeric(df[c])
-        st.markdown("#### Fertility (tokens per word) vs. vocabulary size")
-        metric = st.radio("Metric", ["fertility", "tokens_per_char", "bytes_per_token", "fragment_share"], horizontal=True, key="am_metric")
-        langs = st.multiselect("Languages", sorted(df.language.unique()), default=["English", "Amharic"], key="am_langs")
-        sub = df[df.language.isin(langs)]
-        line = alt.Chart(sub).mark_line(point=True).encode(
-            x=alt.X("vocab_size:Q", scale=alt.Scale(type="log"), title="vocabulary size"), y=alt.Y(f"{metric}:Q"),
-            color="tokenizer:N", strokeDash="language:N", tooltip=["language", "tokenizer", "vocab_size", alt.Tooltip(f"{metric}:Q", format=".3f")])
-        st.altair_chart(altair_font(line.properties(height=340)), width="stretch")
-        st.markdown("#### English vs. Amharic tokens per word")
-        avail = sorted(df[df.tokenizer != "char"].requested_vocab.unique())
-        v_sel = st.select_slider("BPE vocabulary size", [int(v) for v in avail], value=int(avail[len(avail) // 2]), key="am_v")
-        bar_df = df[(df.tokenizer == "char") | (df.requested_vocab == v_sel)]
-        bar = alt.Chart(bar_df).mark_bar().encode(x=alt.X("tokenizer:N", title=None), y=alt.Y("fertility:Q", title="tokens per word"),
-                                                  color="language:N", xOffset="language:N", tooltip=["language", "tokenizer", alt.Tooltip("fertility:Q", format=".2f")])
-        st.altair_chart(altair_font(bar.properties(height=300)), width="stretch")
-        st.dataframe(df[df.tokenizer.isin(["char"]) | (df.requested_vocab == v_sel)][
-            ["language", "tokenizer", "vocab_size", "fertility", "tokens_per_char", "bytes_per_token", "types_for_95", "types_for_99", "fragment_share"]],
-            hide_index=True, width="stretch")
-
-        st.markdown("#### Effect of homophone normalization")
-        stats = json.loads((AM_RESULTS / "stats.json").read_text(encoding="utf-8")) if (AM_RESULTS / "stats.json").exists() else {}
-        if "Amharic" in stats and "Amharic (normalized)" in stats:
-            nr = pd.DataFrame([
-                {"quantity": "distinct characters", "raw": stats["Amharic"]["unique_chars"], "normalized": stats["Amharic (normalized)"]["unique_chars"]},
-                {"quantity": "word types (train)", "raw": stats["Amharic"]["train_word_types"], "normalized": stats["Amharic (normalized)"]["train_word_types"]},
-                {"quantity": "val words unseen in train (%)", "raw": round(100 * stats["Amharic"]["val_unseen_word_rate"], 2),
-                 "normalized": round(100 * stats["Amharic (normalized)"]["val_unseen_word_rate"], 2)},
-            ])
-            st.dataframe(nr, hide_index=True, width="stretch")
-            melted = nr.melt("quantity", var_name="text", value_name="value")
-            st.altair_chart(altair_font(alt.Chart(melted).mark_bar().encode(
-                x=alt.X("text:N", title=None), y="value:Q", color="text:N", column=alt.Column("quantity:N", title=None)).properties(width=120, height=200).resolve_scale(y="independent")),
-                width="content")
-
-        st.markdown("#### Bits per character: English vs Amharic models")
-        bpc = lib.read_csv_rows(AM_RESULTS / "bpc_curves.csv")
-        if bpc:
-            bdf = pd.DataFrame(bpc)
-            bdf["step"], bdf["val_bpc"], bdf["train_bpc"] = pd.to_numeric(bdf.step), pd.to_numeric(bdf.val_bpc), pd.to_numeric(bdf.train_bpc)
-            long = bdf.melt(["model", "step"], ["val_bpc", "train_bpc"], var_name="split", value_name="bits per character")
-            st.altair_chart(altair_font(alt.Chart(long).mark_line(point=True).encode(
-                x="step:Q", y=alt.Y("bits per character:Q", scale=alt.Scale(zero=False)), color="model:N", strokeDash="split:N").properties(height=320)),
-                width="stretch")
-            last = bdf.sort_values("step").groupby("model").tail(1)[["model", "step", "train_bpc", "val_bpc"]]
-            st.dataframe(last, hide_index=True, width="stretch")
-            st.caption("Bits/char = loss per token x tokens/characters / ln 2: comparable across languages and tokenizers. "
-                       "The normalized model is scored on normalized (easier) text, so its number shows the size of the effect, not a like-for-like win.")
-        else:
-            st.info("No trained-model curves yet (results/amharic/bpc_curves.csv).")
-
-        st.markdown("#### Sample Amharic generations")
-        sj = AM_RESULTS / "samples.json"
-        if sj.exists():
-            sd = json.loads(sj.read_text(encoding="utf-8"))
-            pick = st.selectbox("Setting", list(sd["samples"]), index=min(2, len(sd["samples"]) - 1), key="am_sample")
-            show_text(sd["samples"][pick])
-            st.caption(f"Prompt: {sd['prompt']!r} · model: {sd['model']} · for live generation switch the sidebar to Amharic and use the Generate tab.")
-        findings = AM_RESULTS / "FINDINGS.md"
-        if findings.exists():
-            with st.expander("Findings"):
-                st.markdown(findings.read_text(encoding="utf-8"))
-
-# ----------------------------------------------------------------------------------------------
-# 7. Training & experiments
-# ----------------------------------------------------------------------------------------------
-with tabs[7]:
-    st.subheader("Training runs")
-    runs = lib.find_training_runs()
-    if runs:
-        picked = st.multiselect("Runs", list(runs), default=list(runs)[:3], key="tr_runs")
-        data = []
-        for name in picked:
-            for series_name, pts in lib.run_curves(runs[name]).items():
-                data += [{"run": name, "series": series_name, "step": s, "loss": v} for s, v in pts]
-        if data:
-            ddf = pd.DataFrame(data)
-            which = st.multiselect("Series", sorted(ddf.series.unique()), default=["val (eval)", "train (eval)"], key="tr_series")
-            ddf = ddf[ddf.series.isin(which)]
-            st.altair_chart(altair_font(alt.Chart(ddf).mark_line(strokeWidth=2.2).encode(
-                x="step:Q", y=alt.Y("loss:Q", scale=alt.Scale(zero=False)), color="run:N",
-                strokeDash="series:N", tooltip=["run", "series", "step", "loss"]).properties(height=340)), width="stretch")
-        for name in picked:
-            sp = runs[name] / "summary.json"
-            if sp.exists():
-                st.caption(f"**{name}**: " + ", ".join(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}" for k, v in json.loads(sp.read_text()).items()
-                                                      if k in ("params", "best_val_loss", "final_val_loss", "val_bits_per_char", "train_seconds", "mean_tokens_per_sec", "steps")))
-    else:
-        st.info("No training runs found under checkpoints/ or results/runs/.")
-    st.subheader("Experiment reports")
-    reports = lib.list_result_reports()
-    if reports:
-        rep = st.selectbox("Report", reports, format_func=lambda p: str(p.relative_to(RESULTS)).replace("\\", "/"), key="tr_report")
-        for kind, payload in lib.split_markdown_images(rep.read_text(encoding="utf-8"), rep.parent):
-            st.markdown(payload) if kind == "md" else st.image(payload)
-    else:
-        st.info("No reports in results/ yet. See the README for the commands.")
-
-# ----------------------------------------------------------------------------------------------
-# 8. About
-# ----------------------------------------------------------------------------------------------
-with tabs[8]:
     st.subheader("About this model")
     a1, a2 = st.columns([2, 3])
     with a1:
