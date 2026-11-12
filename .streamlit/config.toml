@@ -3,3 +3,16 @@ enableStaticServing = true   # serves app/static/ (the bundled Noto Sans Ethiopi
 
 [browser]
 gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#6366F1"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#161A26"
+textColor = "#E6E8F2"
+baseRadius = "0.6rem"
+borderColor = "#2A3045"
+showWidgetBorder = true
+
+[theme.sidebar]
+backgroundColor = "#121522"

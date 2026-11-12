@@ -32,18 +32,59 @@ import streamlit as st
 from app import lib
 from src.utils import setup_ethiopic_font
 
+plt.style.use("dark_background")                  # matplotlib figures (attention heatmaps) match the dark theme
+plt.rcParams.update({"figure.facecolor": "#0E1117", "axes.facecolor": "#0E1117", "savefig.facecolor": "#0E1117"})
 setup_ethiopic_font()
 FONT = lib.ETHIOPIC_CSS_FONTS
 RESULTS = ROOT / "results"
 AM_RESULTS = RESULTS / "amharic"
 
-st.set_page_config(page_title="GPT from scratch", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="GPT from scratch", layout="wide")
+ACCENT = "#6366F1"
+ACCENT_TEXT = "#A5B4FC"
+PALETTE = ["#818CF8", "#F59E0B", "#34D399", "#F472B6", "#22D3EE", "#FACC15"]
+BG, SURFACE, SURFACE_2, BORDER, MUTED = "#0E1117", "#161A26", "#1E2333", "#2A3045", "#9AA1BD"
 st.markdown(
     f"""
     <style>
-    @font-face {{ font-family: 'Noto Sans Ethiopic'; src: url('app/static/NotoSansEthiopic-Regular.ttf') format('truetype'); }}
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic&display=swap');
-    html, body, .stApp, textarea, input, .stMarkdown, .stTextArea textarea {{ font-family: {FONT}, 'Source Sans Pro', sans-serif; }}
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Ethiopic:wght@400;600&display=swap');
+    @font-face {{ font-family: 'Noto Sans Ethiopic Local'; src: url('app/static/NotoSansEthiopic-Regular.ttf') format('truetype'); }}
+    html, body, .stApp, textarea, input, button, .stMarkdown, .stTextArea textarea {{
+        font-family: 'Inter', {FONT}, 'Noto Sans Ethiopic Local', sans-serif; }}
+    .block-container {{ padding-top: 3.2rem; max-width: 1280px; }}
+    h1, h2, h3, h4 {{ font-weight: 650; letter-spacing: -0.01em; }}
+
+    /* header banner */
+    .hero {{ background: linear-gradient(120deg, #312E81 0%, #4F46E5 55%, #7C3AED 100%); color: #fff;
+             border-radius: 16px; padding: 1.6rem 1.9rem 1.4rem; margin-bottom: 1.2rem;
+             box-shadow: 0 10px 30px rgba(0,0,0,0.45); }}
+    .hero h1 {{ color: #fff; font-size: 1.9rem; margin: 0 0 .35rem; padding: 0; }}
+    .hero p {{ color: rgba(255,255,255,.85); margin: 0 0 1rem; font-size: 1rem; }}
+    .chips {{ display: flex; flex-wrap: wrap; gap: .45rem; }}
+    .chip {{ background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); color: #fff;
+             border-radius: 999px; padding: .22rem .75rem; font-size: .83rem; white-space: nowrap; }}
+
+    /* tabs as pills (Streamlit 1.66 uses react-aria tabs) */
+    .stTabs [role="tablist"] {{ gap: .35rem; flex-wrap: wrap; border-bottom: none; overflow: visible; }}
+    .stTabs [role="tab"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 999px; padding: .38rem 1rem;
+                            height: auto; margin: 0; transition: background .15s; }}
+    .stTabs [role="tab"]:hover {{ background: {SURFACE_2}; }}
+    .stTabs [role="tab"] p {{ font-size: .9rem; font-weight: 500; margin: 0; }}
+    .stTabs [role="tab"][aria-selected="true"] {{ background: {ACCENT}; border-color: {ACCENT}; }}
+    .stTabs [role="tab"][aria-selected="true"] p {{ color: #fff; }}
+    .stTabs .react-aria-SelectionIndicator {{ display: none; }}
+    .stTabs [role="tabpanel"] {{ padding-top: 1.2rem; }}
+
+    /* cards */
+    .out-card {{ background: {SURFACE}; border: 1px solid {BORDER}; border-left: 4px solid {ACCENT}; border-radius: 12px;
+                 padding: 1rem 1.2rem; white-space: pre-wrap; line-height: 1.75; }}
+    .out-title {{ font-weight: 650; color: {ACCENT_TEXT}; margin-bottom: .35rem; font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }}
+    [data-testid="stMetric"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: .5rem .75rem; }}
+    [data-testid="stMetricValue"] {{ font-size: 1.45rem; font-weight: 600; }}
+    .side-card {{ background: {SURFACE_2}; border: 1px solid {BORDER}; border-radius: 12px; padding: .75rem .95rem; font-size: .86rem;
+                  display: grid; grid-template-columns: auto 1fr; gap: .38rem .8rem; }}
+    .side-card .k {{ color: {MUTED}; }}
+    .side-card .v {{ font-weight: 600; text-align: right; }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -69,18 +110,24 @@ def get_playground(set_name: str, vocab_size: int):
 
 def show_text(text: str) -> None:
     """Plain text that keeps newlines and renders Ge'ez (st.code would use a monospace font without Ethiopic glyphs)."""
-    st.markdown(f"<div style=\"white-space:pre-wrap;font-family:{FONT},sans-serif;line-height:1.7\">{html.escape(text)}</div>",
-                unsafe_allow_html=True)
+    st.markdown(f"<div class='out-card'>{html.escape(text)}</div>", unsafe_allow_html=True)
 
 
 def altair_font(chart: alt.Chart) -> alt.Chart:
-    return chart.configure(font="Noto Sans Ethiopic, Nyala, Ebrima, sans-serif")
+    """One look for every chart: the app's font (with Ge'ez fallbacks), its palette, light grid lines and no frame."""
+    return (chart.configure(font="Inter, Noto Sans Ethiopic, Nyala, Ebrima, sans-serif", background="transparent")
+            .configure_range(category=PALETTE)
+            .configure_mark(color=PALETTE[0])
+            .configure_view(strokeWidth=0)
+            .configure_axis(gridColor="#252B3D", domainColor="#3A4160", labelColor="#C3C8DC", titleColor="#C3C8DC",
+                            labelFontSize=12, titleFontSize=12)
+            .configure_legend(labelFontSize=12, titleFontSize=12, labelColor="#C3C8DC", titleColor="#C3C8DC"))
 
 
 def plot_attention(matrix, labels: list[str], title: str):
     n = len(labels)
     fig, ax = plt.subplots(figsize=(min(11, 3 + 0.28 * n), min(11, 3 + 0.28 * n)))
-    im = ax.imshow(matrix, cmap="viridis", vmin=0, vmax=float(matrix.max()) if float(matrix.max()) > 0 else 1)
+    im = ax.imshow(matrix, cmap="magma", vmin=0, vmax=float(matrix.max()) if float(matrix.max()) > 0 else 1)
     ax.set_xticks(range(n))
     ax.set_yticks(range(n))
     fs = 9 if n <= 24 else 7 if n <= 48 else 5
@@ -97,7 +144,7 @@ def plot_attention(matrix, labels: list[str], title: str):
 # ----------------------------------------------------------------------------------------------
 # sidebar: model selector
 # ----------------------------------------------------------------------------------------------
-st.sidebar.title("GPT from scratch")
+st.sidebar.markdown("### Choose a model")
 choice = st.sidebar.radio("Model", list(lib.MODELS), help="Each language has its own checkpoint and tokenizer.")
 data_choice = st.sidebar.radio("Training data", list(lib.DATA_VARIANTS),
                                help="Same architecture and training steps; the full-data model was trained on ~3-4x more text.")
@@ -120,17 +167,27 @@ mc = info["model_config"]
 tok_kind = {"char": "character-level", "byte": "byte-level BPE"}.get(info["tokenizer_type"], info["tokenizer_type"])
 if getattr(tok, "level", None) == "char":
     tok_kind = "character-level BPE"
-st.sidebar.markdown(
-    f"**{info['params']:,}** parameters  \n{mc['n_layer']} layers · {mc['n_head']} heads · C={mc['n_embd']}  \n"
-    f"context {mc['block_size']} tokens  \nvocab {info['vocab_size']} ({tok_kind})  \n"
-    f"trained {info['step'] or '?'} steps" + (f", best val loss {info['best_val_loss']:.3f}" if info.get("best_val_loss") else "")
-    + f"  \ndata: {lib.DATA_DESCRIPTIONS.get(mkey, mkey)}" + (f" ({info['train_chars'] / 1e6:.1f}M characters)" if info.get("train_chars") else "")
-)
-st.sidebar.caption("Demo checkpoints are small CPU-trained models, so expect rough text; see the About tab.")
+train_chars = f"{info['train_chars'] / 1e6:.1f}M characters" if info.get("train_chars") else "?"
+best = f"{info['best_val_loss']:.3f}" if info.get("best_val_loss") else "?"
+side_rows = [("Parameters", f"{info['params']:,}"), ("Layers / heads", f"{mc['n_layer']} / {mc['n_head']}"), ("Embedding size", mc["n_embd"]),
+             ("Context", f"{mc['block_size']} tokens"), ("Tokenizer", tok_kind), ("Vocabulary", f"{info['vocab_size']} tokens"),
+             ("Training steps", f"{info['step'] or '?'}"), ("Best val. loss", best), ("Training text", train_chars)]
+st.sidebar.markdown("<div class='side-card'>" + "".join(f"<span class='k'>{k}</span><span class='v'>{html.escape(str(v))}</span>" for k, v in side_rows)
+                    + "</div>", unsafe_allow_html=True)
+st.sidebar.caption(f"Data: {lib.DATA_DESCRIPTIONS.get(mkey, mkey)}. Trained from random weights on a Colab T4 GPU, so expect "
+                   "Shakespeare-like or news-like text without real meaning.")
 
-st.title("🧠 A GPT-2-style language model, built from scratch")
-tabs = st.tabs(["✍️ Generate", "🔍 Next-token inspector", "🌡️ Temperature comparison", "📚 Small vs full data", "👁️ Attention explorer",
-                "🔤 Tokenizer playground", "🇪🇹 Amharic study", "📈 Training & experiments", "ℹ️ About"])
+chips = [f"<b>{choice}</b>", data_choice, f"{info['params'] / 1e6:.1f}M parameters", f"{mc['n_layer']} layers", f"{mc['n_head']} heads",
+         f"{mc['block_size']}-token context", tok_kind]
+st.markdown(
+    "<div class='hero'><h1>A GPT-2-style language model, built from scratch</h1>"
+    "<p>Tokenizer, attention, LayerNorm, Transformer blocks, training and sampling written in plain PyTorch, "
+    "trained on English Shakespeare and Amharic text.</p>"
+    "<div class='chips'>" + "".join(f"<span class='chip'>{c}</span>" for c in chips) + "</div></div>",
+    unsafe_allow_html=True,
+)
+tabs = st.tabs(["Generate", "Next-token inspector", "Temperature comparison", "Small vs full data", "Attention explorer",
+                "Tokenizer playground", "Amharic study", "Training & experiments", "About"])
 
 # ----------------------------------------------------------------------------------------------
 # 1. Generate
@@ -150,12 +207,15 @@ with tabs[0]:
         _, dropped = lib.encode_prompt_safe(tok, prompt)
         if dropped:
             st.warning(f"Skipped characters this tokenizer has never seen: {' '.join(dropped)}")
-        st.markdown("**Output** (streaming):")
         t0, n_chars = time.time(), 0
-        box = st.container(border=True)
-        with box:
-            st.markdown(f"<span style='opacity:.55;white-space:pre-wrap;font-family:{FONT}'>{html.escape(prompt)}</span>", unsafe_allow_html=True)
-            out = st.write_stream(lib.stream_text(model, tok, prompt, max_new, method, temperature, top_k, top_p, int(seed), use_cache))
+        st.markdown("<div class='out-title'>Output</div>", unsafe_allow_html=True)
+        box, out = st.empty(), ""
+        head = f"<span style='opacity:.5'>{html.escape(prompt)}</span>"
+        for i, chunk in enumerate(lib.stream_text(model, tok, prompt, max_new, method, temperature, top_k, top_p, int(seed), use_cache)):
+            out += chunk
+            if i % 4 == 0:                                   # redraw every few tokens; keeps newlines, unlike st.write_stream
+                box.markdown(f"<div class='out-card'>{head}{html.escape(out)}</div>", unsafe_allow_html=True)
+        box.markdown(f"<div class='out-card'>{head}{html.escape(out)}</div>", unsafe_allow_html=True)
         dt = time.time() - t0
         st.caption(f"{max_new} tokens in {dt:.1f}s ({max_new / dt:.0f} tokens/s, KV cache {'on' if use_cache else 'off'}). "
                    f"Same seed + settings always gives the same text.")
@@ -197,7 +257,7 @@ with tabs[1]:
     left, right = st.columns([3, 2])
     with left:
         df = pd.DataFrame({"token": [t["label"] for t in top], "probability": [t["prob"] for t in top]})
-        chart = alt.Chart(df).mark_bar().encode(
+        chart = alt.Chart(df).mark_bar(cornerRadiusEnd=4).encode(
             x=alt.X("probability:Q", axis=alt.Axis(format="%")), y=alt.Y("token:N", sort=None, title=None),
             tooltip=["token", alt.Tooltip("probability:Q", format=".2%")]).properties(height=330)
         st.altair_chart(altair_font(chart), width="stretch")
@@ -208,8 +268,8 @@ with tabs[1]:
         for rank, t in enumerate(top):
             cols[rank % 2].button(f"{t['label']}  ·  {t['prob']:.1%}", key=f"pick_{mkey}_{rank}", on_click=_append, args=(t["id"],), width="stretch")
         b1, b2 = st.columns(2)
-        b1.button("↩ Undo last token", on_click=_undo, key=f"undo_{mkey}", width="stretch")
-        b2.button("⟲ Reset", on_click=_reset, key=f"reset_{mkey}", width="stretch")
+        b1.button("Undo last token", on_click=_undo, key=f"undo_{mkey}", width="stretch")
+        b2.button("Reset", on_click=_reset, key=f"reset_{mkey}", width="stretch")
     st.markdown("**Current tokens:**")
     st.markdown(lib.tokens_to_html([lib.token_labels(tok, [i], visible=False)[0] for i in ids[-60:]]), unsafe_allow_html=True)
     st.caption(f"{len(ids)} tokens in context" + (f" (the model only looks at the last {mc['block_size']})" if len(ids) > mc["block_size"] else ""))
@@ -235,7 +295,7 @@ with tabs[2]:
             for col, (name, kw) in zip(cols, settings):
                 text = lib.generate_text(model, tok, t_prompt, t_max, int(t_seed), **kw)
                 with col:
-                    st.markdown(f"**{name}**")
+                    st.markdown(f"<div class='out-title'>{name}</div>", unsafe_allow_html=True)
                     show_text(t_prompt + text)
                     st.caption(f"distinct char bigrams: {lib.distinct_n(text, 2):.2f}")
 
@@ -258,14 +318,14 @@ with tabs[4]:
         n = mc["n_head"]
         fig, axes = plt.subplots(1, n, figsize=(2.6 * n, 2.8), squeeze=False)
         for h in range(n):
-            axes[0][h].imshow(attn[layer][h].numpy(), cmap="viridis", vmin=0, vmax=1)
+            axes[0][h].imshow(attn[layer][h].numpy(), cmap="magma", vmin=0, vmax=1)
             axes[0][h].set_title(f"head {h}", fontsize=8)
             axes[0][h].set_xticks([])
             axes[0][h].set_yticks([])
         fig.tight_layout()
         st.pyplot(fig, clear_figure=True)
     st.caption("Look for a bright diagonal just below the main diagonal (a previous-token head), a bright first column (attention sink), "
-               "or vertical stripes on punctuation. Small CPU models show these patterns only roughly.")
+               "or vertical stripes on punctuation.")
 
 # ----------------------------------------------------------------------------------------------
 # 5. Tokenizer playground
@@ -405,9 +465,9 @@ with tabs[7]:
             ddf = pd.DataFrame(data)
             which = st.multiselect("Series", sorted(ddf.series.unique()), default=["val (eval)", "train (eval)"], key="tr_series")
             ddf = ddf[ddf.series.isin(which)]
-            st.altair_chart(alt.Chart(ddf).mark_line().encode(x="step:Q", y=alt.Y("loss:Q", scale=alt.Scale(zero=False)), color="run:N",
-                                                              strokeDash="series:N", tooltip=["run", "series", "step", "loss"]).properties(height=340),
-                            width="stretch")
+            st.altair_chart(altair_font(alt.Chart(ddf).mark_line(strokeWidth=2.2).encode(
+                x="step:Q", y=alt.Y("loss:Q", scale=alt.Scale(zero=False)), color="run:N",
+                strokeDash="series:N", tooltip=["run", "series", "step", "loss"]).properties(height=340)), width="stretch")
         for name in picked:
             sp = runs[name] / "summary.json"
             if sp.exists():
@@ -446,9 +506,9 @@ with tabs[8]:
         weight tying, training loop, sampling (greedy / temperature / top-k / top-p) and a KV cache.
         No pretrained weights, no Hugging Face model code, no `nn.Transformer`, no `nn.MultiheadAttention`, no fused attention kernels.
 
-        **Honesty note:** the demo checkpoints are small models trained on a laptop CPU for a short time, so the text is only
-        roughly English/Amharic-looking. The assignment-sized model (`configs/small.yaml`, ~10.8M parameters) is meant to be trained on a
-        Colab T4; export it with `python scripts/export_for_demo.py` and the demo will load it.
+        **What to expect:** all four models (English and Amharic, small and full data) have about 10.8M parameters and were trained from
+        random weights for 3,000 steps (about 13 minutes each) on a free Colab T4. They write text in the right style and mostly real
+        words, but without coherent meaning.
         """
     )
 
@@ -507,5 +567,5 @@ with tabs[3]:
             cols = st.columns(2)
             for col, (label, key, (m, t, inf)) in zip(cols, variants):
                 with col:
-                    st.markdown(f"**{label}**")
+                    st.markdown(f"<div class='out-title'>{label}</div>", unsafe_allow_html=True)
                     show_text(d_prompt + lib.generate_text(m, t, d_prompt, d_max, int(d_seed), temperature=d_temp))

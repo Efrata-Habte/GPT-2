@@ -215,7 +215,7 @@ def param_breakdown_rows(model: GPT) -> list[tuple[str, int]]:
 # ----------------------------------------------------------------------------------------------
 # Tokenizer playground
 # ----------------------------------------------------------------------------------------------
-TOKEN_COLORS = ["rgba(0,114,178,0.28)", "rgba(213,94,0,0.28)", "rgba(0,158,115,0.28)", "rgba(204,121,167,0.30)", "rgba(230,159,0,0.30)"]
+TOKEN_COLORS = ["rgba(129,140,248,0.32)", "rgba(245,158,11,0.30)", "rgba(52,211,153,0.28)", "rgba(244,114,182,0.30)", "rgba(34,211,238,0.28)"]
 
 
 def load_playground_tokenizers(set_name: str, vocab_size: int, tok_dir: str | Path | None = None) -> dict:
@@ -266,8 +266,8 @@ def tokens_to_html(labels: list[str], font_stack: str = ETHIOPIC_CSS_FONTS) -> s
     spans = []
     for i, lab in enumerate(labels):
         shown = html.escape(lab).replace("\n", "↵").replace(" ", "&nbsp;") or "&nbsp;"
-        spans.append(f'<span style="background:{TOKEN_COLORS[i % len(TOKEN_COLORS)]};padding:2px 1px;border-radius:3px;'
-                     f'margin-right:1px;white-space:pre-wrap;">{shown}</span>')
+        spans.append(f'<span style="background:{TOKEN_COLORS[i % len(TOKEN_COLORS)]};padding:3px 4px;border-radius:6px;'
+                     f'margin:0 2px 0 0;white-space:pre-wrap;">{shown}</span>')
     return f'<div style="font-family:{font_stack},sans-serif;font-size:1.15rem;line-height:2.1;word-break:break-all;">{"".join(spans)}</div>'
 
 
