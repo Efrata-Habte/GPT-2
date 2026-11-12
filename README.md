@@ -96,11 +96,11 @@ I see he is a sanctuary of his power
 
 | test text | small data | full data |
 |---|---|---|
-| unseen Shakespeare (T4 models) | 2.311 bits/char | **1.778** (23% better) |
-| Amharic Wikipedia (CPU demo models) | 4.188 | **3.525** (15.9% better) |
-| Amharic news (CPU demo models) | **3.072** | 3.252 (5.9% worse: with the same steps it saw less news) |
+| unseen Shakespeare | 2.311 bits/char | **1.778** (23.1% better) |
+| Amharic Wikipedia | 3.784 | **2.729** (27.9% better) |
+| Amharic news | **2.385** | 2.500 (4.8% worse: with the same steps it saw about a third as much news) |
 
-The Amharic comparison still uses the small CPU demo models; the T4 full-data Amharic model (`configs/amharic_full.yaml`) is the one run still to do.
+All four are the 10.8-10.9M-parameter T4 models.
 
 ## Amharic (Ge'ez script) study
 

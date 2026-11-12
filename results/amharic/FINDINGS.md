@@ -61,37 +61,38 @@ architecture, 2,500 steps, same seed). This note is hand-written from those numb
 
 ## 6. English vs Amharic models: choose the unit carefully
 
-| model (CPU demo, 2,500 steps) | val bits/char | val bits/byte | val bits/word |
+| model (T4, 10.8-10.9M parameters, 3,000 steps) | val bits/char | val bits/byte | val bits/word |
 |---|---|---|---|
-| English, char-level | 2.348 | 2.348 | 12.8 |
-| Amharic, char-level | 3.073 | 1.190 | 16.0 |
+| English, char-level | 2.164 | 2.164 | 11.8 |
+| Amharic, char-level | 2.388 | 0.925 | 12.4 |
 
-- Per character, Amharic looks harder (a syllable carries more information than a Latin letter). Per byte it looks easier.
-  Per word it is ~25% more expensive, consistent with the larger word inventory. None of these is "the" answer; the report should say which one it uses and why.
-- Confound: the English corpus is 1.1M characters and the Amharic one 3.75M, so 2,500 steps is about 10 epochs of English but 3 of Amharic.
-  That is visible as a larger train/val gap for English (0.29 vs 0.09 bits/char). The two corpora also differ in genre (plays vs news).
+- Per character, Amharic looks harder (a syllable carries more information than a Latin letter). Per byte it looks much easier, and per
+  word the two are close (12.4 against 11.8 bits). None of these is "the" answer; the report should say which one it uses and why.
+- Confound: the English corpus is 1.1M characters and the Amharic one 3.75M, so 3,000 steps of 64 x 256 characters is about 49 epochs of
+  English but 15 of Amharic. The English model overfits (best validation loss at step 1,750); the Amharic one does not. The corpora also
+  differ in genre (plays vs news).
 
 ## 7. Samples
 
-- Greedy decoding loops on frequent words (`አስተዳደር አስተዳደር ...`), as it does in English.
-- T = 0.5-0.8 produces runs of real-looking words with Ethiopic punctuation (`።`, `፣`) and news vocabulary (ministry, Europe, football club).
-  It is not coherent text, as expected from a 0.46M-parameter model. T = 1.3 invents non-words and stray symbols.
-- See `samples.json` / `tokenizer_analysis.md` for the full samples, and the demo's Generate tab to try your own prompts.
+- With the T4 model, temperature 0.8 produces sentences that look like Amharic news: real names, ministries and places, Ethiopic
+  punctuation, and locally grammatical phrases, but no coherent story across sentences. Greedy decoding still tends to repeat phrases.
+- See `samples.json` / `tokenizer_analysis.md` for samples at several temperatures, and the demo's Generate tab to try your own prompts.
+  (The glosses and the judgement of grammaticality are mine; a native speaker should check them.)
 
 ## 8. More data: Wikipedia + news vs news only (experiment 12)
 
-Same architecture, steps and seed; the full model's training text is 9.9M characters (Wikipedia + the same news) vs 3.4M.
-Both are scored on text neither saw (`results/data_scale/data_scale.md`):
+Same 10.9M-parameter architecture, 3,000 steps and seed on a Colab T4; the full model's training text is 9.9M characters
+(Wikipedia + the same news) against 3.4M. Both are scored on text neither saw (`results/data_scale/data_scale.md`):
 
 | test text | news-only model | Wikipedia + news model |
 |---|---|---|
-| held-out news | **3.072** bits/char | 3.252 (5.9% worse) |
-| held-out Wikipedia | 4.188 | **3.525** (15.9% better) |
+| held-out news | **2.385** bits/char | 2.500 (4.8% worse) |
+| held-out Wikipedia | 3.784 | **2.729** (27.9% better) |
 
-- The news-only model is badly out of domain on encyclopedic text (4.19 vs 3.07 bits/char on news): the topic and register shift matters
-  more than the script.
-- The mixed model generalises much better, but with a fixed budget of 2,500 steps it saw about a third as much news, so it is worse on news.
-  More data helps most when the model also gets enough capacity and steps to use it; that is what the T4 runs can show.
+- The news-only model is far out of domain on encyclopedic text (3.78 against 2.39 bits/char on news): the topic and register shift
+  matters more than the script.
+- The mixed model generalises much better, but with a fixed budget of 3,000 steps it saw about a third as much news, so it is slightly
+  worse on news. The same pattern appeared with the small CPU models (15.9% better on Wikipedia, 5.9% worse on news).
 
 ## Limitations
 
